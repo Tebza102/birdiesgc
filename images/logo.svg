@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" width="200" height="60">
+  <!-- Birdie Squad Logo -->
+  <defs>
+    <linearGradient id="greenGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#417845"/>
+      <stop offset="100%" style="stop-color:#6EAF54"/>
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#B29242"/>
+      <stop offset="100%" style="stop-color:#D4B85A"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Symbol - Golf silhouette with wave -->
+  <g transform="translate(10, 5)">
+    <!-- Green wave / movement line -->
+    <path d="M5 35 Q15 25, 25 30 Q35 35, 45 25 Q50 20, 55 25" 
+          fill="none" 
+          stroke="url(#greenGrad)" 
+          stroke-width="4" 
+          stroke-linecap="round"/>
+    
+    <!-- Golfer silhouette -->
+    <circle cx="20" cy="18" r="6" fill="#7B7B7C"/>
+    <path d="M20 24 L18 32 L15 40 M22 24 L25 32 L28 40 M20 27 L12 30 M20 27 L28 30" 
+          stroke="#7B7B7C" 
+          stroke-width="2.5" 
+          stroke-linecap="round" 
+          fill="none"/>
+    
+    <!-- Golf ball arc -->
+    <circle cx="40" cy="12" r="3" fill="url(#goldGrad)"/>
+    <path d="M43 9 Q48 6, 52 10" 
+          fill="none" 
+          stroke="url(#goldGrad)" 
+          stroke-width="1.5" 
+          stroke-linecap="round" 
+          opacity="0.6"/>
+  </g>
+  
+  <!-- Wordmark - Manrope font -->
+  <text x="70" y="38" 
+        font-family="'Manrope', 'Inter', sans-serif" 
+        font-size="24" 
+        font-weight="700" 
+        fill="#417845">
+    Birdie Squad
+  </text>
+  
+  <!-- Tagline -->
+  <text x="72" y="52" 
+        font-family="'Manrope', 'Inter', sans-serif" 
+        font-size="10" 
+        font-weight="500" 
+        fill="#7B7B7C" 
+        letter-spacing="1">
+    GOLF CLUB
+  </text>
+</svg>

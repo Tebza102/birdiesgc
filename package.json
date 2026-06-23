@@ -1,0 +1,14 @@
+{
+  "name": "birdie-squad-golf-club",
+  "version": "1.0.0",
+  "description": "Birdie Squad Golf Club website",
+  "scripts": {
+    "dev": "node scripts/dev-server.js --port 4173",
+    "serve": "node scripts/dev-server.js --port 4173",
+    "build": "echo 'No build step needed for static site'"
+  },
+  "devDependencies": {},
+  "keywords": [],
+  "author": "Birdie Squad Golf Club",
+  "license": "ISC"
+}
