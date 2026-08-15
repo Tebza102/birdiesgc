@@ -1,53 +1,69 @@
 # Next Action
 
 ## Current Objective
-Move Birdie Squad from a static website with prototype authentication to the smallest usable Supabase-backed golf-day prototype while preserving the current website and familiar club workflow.
+Finish Gate 2 by validating the already-built Supabase-backed Events/member golf workflow with real approved users, without expanding scope.
 
-## Execution Gate
-Do not modify application source until the backend project and schema are deliberately established and verified. The database must reflect the supplied spreadsheet workflow rather than invented golf rules.
+## Gate Status
+- Gate 1 — Backend/database/RLS/spreadsheet validation: **COMPLETE**.
+- Gate 2 — Auth/calendar/scorer/digital scorecard/live leaderboard: **IMPLEMENTED ON FEATURE BRANCH; REAL-USER VALIDATION REQUIRED**.
+- Gate 3 — Private chairman/member preview: **NOT STARTED**.
 
-## Safest Next 7 Actions
-1. Obtain explicit confirmation to create the dedicated Birdie Squad Supabase project in the connected Apprigate organisation at the quoted R0/month cost.
-2. Create the project and verify it reaches a healthy state.
-3. Create the MVP schema, grants, constraints, indexes, RLS policies, and Realtime configuration; then run Supabase security/performance advisors and fix material findings.
-4. Seed/import the minimum useful club data from the supplied spreadsheet: member roster, current handicap reference where reliable, and one historical golf-day validation dataset.
-5. Validate that the database reproduces the historical spreadsheet ranking before building UI around it.
-6. Replace the prototype hard-coded login and connect the existing static site to Supabase using only the project URL and publishable browser key.
-7. Build and test the Events calendar, member-only golf-day view, scorer capture screen, digital scorecard, and live leaderboard on the feature branch; deploy only to preview until reviewed.
+## Immediate Next Actions
+1. Bootstrap one real Supabase Auth pilot account using an email address supplied/approved by the user.
+2. Mark that profile `approved = true` and assign `admin`, `management`, or `scorer` as appropriate using controlled database administration — never browser-editable metadata.
+3. Sign in on the Events page and verify the member hub loads the imported Game 15 leaderboard.
+4. Create one throwaway live golf day from the UI and add a few imported roster players.
+5. Enter hole scores through the Excel-familiar scorer grid and confirm totals/positions.
+6. Bootstrap a second approved `member` account and verify it can watch the leaderboard but cannot write scores.
+7. Verify Realtime updates in two independent sessions.
+8. Remove/replace the legacy hard-coded auth implementation from shared `js/main.js` before any production merge.
+9. Re-run Supabase Security Advisor after any auth/RLS changes.
+10. Prepare a private preview only after the above passes.
+
+## User Input Policy
+Do not ask the user to create tables, copy SQL, understand Supabase internals, or manage roles manually. Ask only for the smallest information that cannot safely be inferred or generated — currently the email address(es) to use for real pilot Auth accounts.
 
 ## Exact MVP User Journeys
 ### Public visitor
-- Browse existing public website.
-- View basic upcoming events.
-- Login remains available.
+- Browse the existing public website.
+- View basic published event information.
+- See a Member Login entry point.
 
-### Logged-in member
-- Sign in with real Supabase Auth credentials.
-- See additional golf-day/event actions.
-- Open current/live golf day.
-- View live leaderboard.
-- Open a player's digital scorecard.
-- Cannot change scores.
+### Approved member
+- Sign in using real Supabase Auth.
+- See the database-backed club golf calendar.
+- Open a golf day.
+- View leaderboard and player scorecards.
+- Cannot create golf days or edit scores.
 
-### Scorer / management / admin
-- Sign in.
-- Open/create a golf day.
-- Select participating players from the existing club roster.
-- Capture/update scores from a phone with minimal taps.
-- See totals and ranking update automatically.
-- Finalise a golf day when scoring is complete.
+### Approved scorer
+- Member permissions.
+- Add participating roster players to a golf day.
+- Enter/edit hole scores through the spreadsheet-familiar grid.
+- Cannot change platform security or manage unrelated data.
+
+### Approved management/admin
+- Scorer permissions.
+- Create golf days and change round state (`scheduled` → `live` → `closed`).
+
+## Acceptance Tests Already Passed
+- 83 spreadsheet roster members imported.
+- Game 15 / STATEMINES GC imported with 22 players.
+- Database leaderboard matches spreadsheet ranking exactly, including ties.
+- Temporary live hole-score test summed scores, counted holes completed, and ranked players correctly.
+- Seeded historical round is hidden from anonymous users.
+- Supabase Security Advisor currently reports no security findings.
 
 ## UX Rule
-The scorer screen must feel like a simplified digital continuation of the current Excel process. Prioritise names, game number/title, venue, date, handicap reference, scores, totals, and position. Do not require golf-software training.
+The scorer screen must remain a simplified continuation of the spreadsheet: players vertically, holes horizontally, totals visible, minimal navigation. Do not redesign it into a generic golf analytics dashboard.
 
 ## Do Not Do Yet
-- Do not rebuild in Next.js/React or change framework.
+- Do not rebuild in React/Next.js.
 - Do not redesign the public website.
-- Do not automate complex handicap/differential rules.
-- Do not build Order of Merit/Admin Points/statistics/GPS/social/tournament/watch features.
+- Do not automate handicap/differential logic.
+- Do not build Order of Merit, Admin Points, GPS, statistics, social, team/tournament, payment, sponsor-dashboard, or CRM features.
 - Do not expose Supabase secret/service-role credentials.
-- Do not merge to `main` or deploy to production before preview validation.
-- Do not add abstractions or dependencies unless required for the approved MVP.
+- Do not merge to `main` or production before two-user preview validation.
 
-## Definition of Done for MVP
-The prototype is done when a scorer can capture a golf day from a phone; a second logged-in member can watch the leaderboard change; an individual player scorecard can be opened; the historical validation game ranks in the same order as the supplied spreadsheet; and the existing public website remains functional.
+## Definition of Done for Gate 2
+Gate 2 is complete only when an approved scorer can create/open a golf day, add players and enter scores; an approved member in a second session sees the updated live leaderboard and scorecard; member writes are blocked; unapproved access is blocked; and the existing public Events page still works.
