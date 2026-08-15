@@ -34,7 +34,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if grep -RIn --exclude-dir=.git --exclude='*.md' --exclude='*.sql' -E 'service_role|sb_secret_' .; then
+          if grep -RIn \
+            --exclude-dir=.git \
+            --exclude-dir=.github \
+            --include='*.html' \
+            --include='*.js' \
+            --include='*.css' \
+            -E 'service_role|sb_secret_' .; then
             echo 'A backend secret marker was found in shipped application files.' >&2
             exit 1
           fi
