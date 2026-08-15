@@ -1,0 +1,71 @@
+/* Birdie Squad Golf Club - Club Scoring MVP */
+.scoring-page { background: #f4f6f1; min-height: 100vh; color: #18251d; }
+.scoring-hero { background: linear-gradient(135deg, #0f2d1f 0%, #1e5136 100%); color: #fff; padding: 64px 0 48px; }
+.scoring-hero-inner { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(260px, .5fr); gap: 32px; align-items: end; }
+.scoring-kicker, .eyebrow { margin: 0 0 8px; font: 700 12px/1.2 Manrope, sans-serif; letter-spacing: .12em; text-transform: uppercase; }
+.scoring-kicker { color: #d7dbaa; }
+.scoring-hero h1 { margin: 0 0 12px; max-width: 800px; font-size: clamp(2rem, 5vw, 3.75rem); line-height: 1.02; }
+.scoring-hero p { max-width: 760px; margin-bottom: 0; }
+.scoring-connection-card { display: flex; gap: 12px; align-items: flex-start; padding: 18px; border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.08); border-radius: 16px; }
+.connection-dot { width: 10px; height: 10px; margin-top: 6px; border-radius: 50%; background: #d7dbaa; box-shadow: 0 0 0 5px rgba(215,219,170,.14); }
+.scoring-connection-card p { margin: 4px 0 0; font-size: 13px; opacity: .84; }
+.scoring-shell { padding-top: 36px; padding-bottom: 80px; }
+.scoring-card { background: #fff; border: 1px solid #dfe6dc; border-radius: 18px; padding: 24px; box-shadow: 0 14px 35px rgba(24,37,29,.06); }
+.login-card { display: grid; grid-template-columns: 1fr minmax(280px, 420px); gap: 40px; align-items: center; max-width: 980px; margin: 0 auto; }
+.scoring-form, .score-entry-grid { display: grid; gap: 12px; }
+.scoring-form label, .score-entry-grid label, .toolbar-actions label { font-weight: 700; font-size: 13px; }
+.scoring-form input, .score-entry-grid input, .score-entry-grid select, .toolbar-actions select { width: 100%; border: 1px solid #cbd6ca; border-radius: 10px; background: #fff; padding: 12px 14px; font: inherit; color: #18251d; }
+.scoring-toolbar { display: flex; justify-content: space-between; gap: 24px; align-items: end; margin-bottom: 20px; }
+.toolbar-actions { display: grid; grid-template-columns: auto minmax(260px, 1fr) auto; gap: 10px; align-items: end; }
+.leaderboard-card { padding: 0; overflow: hidden; }
+.leaderboard-heading { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; padding: 24px; border-bottom: 1px solid #e3e9df; }
+.leaderboard-heading h2 { margin: 2px 0 6px; }
+.muted { color: #667269; }
+.status-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 76px; border-radius: 999px; padding: 8px 11px; background: #edf3ea; color: #31543e; font-weight: 800; font-size: 11px; letter-spacing: .08em; }
+.status-badge[data-status="live"] { background: #e8f5e9; color: #20682f; }
+.status-badge[data-status="closed"] { background: #eef0ed; color: #566057; }
+.spreadsheet-note { margin: 18px 24px 0; padding: 12px 14px; background: #f3f5e5; border-left: 4px solid #a6ad54; border-radius: 8px; font-size: 13px; }
+.table-scroll { overflow-x: auto; }
+.leaderboard-table { width: 100%; border-collapse: collapse; min-width: 620px; }
+.leaderboard-table th { text-align: left; padding: 12px 18px; background: #163824; color: #fff; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
+.leaderboard-table td { padding: 13px 18px; border-bottom: 1px solid #e4e9e2; }
+.leaderboard-table tbody tr:nth-child(even) { background: #fafbf8; }
+.rank-cell { font-weight: 800; width: 72px; }
+.score-cell { font-weight: 800; font-variant-numeric: tabular-nums; }
+.scorecard-link { border: 0; background: transparent; color: #173e28; font: inherit; font-weight: 700; padding: 0; cursor: pointer; text-decoration: underline; text-decoration-color: #bdc79b; text-underline-offset: 3px; }
+.scorer-card { margin-top: 20px; display: grid; grid-template-columns: minmax(220px, .8fr) minmax(0, 1.2fr); gap: 28px; align-items: end; }
+.score-entry-grid { grid-template-columns: minmax(180px, 1.4fr) 90px 110px auto; align-items: end; }
+.score-entry-grid > div { display: grid; gap: 7px; }
+.save-score-button { white-space: nowrap; min-height: 46px; }
+.scorecard-dialog { width: min(760px, calc(100vw - 28px)); border: 0; border-radius: 18px; padding: 0; box-shadow: 0 28px 90px rgba(0,0,0,.28); }
+.scorecard-dialog::backdrop { background: rgba(8,20,13,.65); }
+.scorecard-dialog-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; padding: 22px 24px; border-bottom: 1px solid #e4e9e2; }
+.scorecard-dialog-head h2 { margin: 2px 0 4px; }
+.dialog-close { border: 0; background: #edf1eb; width: 38px; height: 38px; border-radius: 50%; font-size: 26px; line-height: 1; cursor: pointer; }
+.scorecard-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; padding: 24px; }
+.hole-box { min-height: 72px; border: 1px solid #dce4da; border-radius: 10px; padding: 10px; display: flex; flex-direction: column; justify-content: space-between; background: #fbfcfa; }
+.hole-box span { font-size: 11px; color: #6d786f; text-transform: uppercase; letter-spacing: .04em; }
+.hole-box strong { font-size: 24px; }
+#scoring-status[data-kind="error"] { color: #ffd3d3; }
+#scoring-status[data-kind="warning"] { color: #ffe6ad; }
+#scoring-status[data-kind="success"] { color: #e3f5d4; }
+
+@media (max-width: 900px) {
+    .scoring-hero-inner, .login-card, .scorer-card { grid-template-columns: 1fr; }
+    .toolbar-actions { grid-template-columns: 1fr; width: 100%; }
+    .scoring-toolbar { align-items: stretch; flex-direction: column; }
+    .score-entry-grid { grid-template-columns: 1fr 1fr; }
+    .score-entry-grid > div:first-child, .save-score-button { grid-column: 1 / -1; }
+    .scorecard-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 560px) {
+    .scoring-hero { padding: 42px 0 34px; }
+    .scoring-card { padding: 18px; border-radius: 14px; }
+    .leaderboard-card { padding: 0; }
+    .leaderboard-heading { padding: 18px; }
+    .spreadsheet-note { margin: 14px 18px 0; }
+    .score-entry-grid { grid-template-columns: 1fr; }
+    .score-entry-grid > div:first-child, .save-score-button { grid-column: auto; }
+    .scorecard-grid { grid-template-columns: repeat(2, 1fr); padding: 18px; }
+}
