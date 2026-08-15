@@ -1,75 +1,109 @@
 # Current Status
 
 ## Summary
-Birdie Squad is currently a working static public website that is being prepared for a tightly scoped golf-day MVP. The public site must be preserved. The MVP will add Supabase-backed authentication, events, a digital scorecard, scorer-controlled score entry, and a live leaderboard without rebuilding the site or attempting to clone Golf GameBook.
+Birdie Squad now has a verified Supabase backend and a feature-branch Events-page MVP integration. The existing public website remains intact. Gate 1 (backend proof) is complete. Gate 2 (real login + calendar + scorer capture + digital scorecard + live leaderboard) is implemented on the feature branch but cannot be declared complete until real approved Supabase test accounts are created and the browser workflow is exercised end to end.
 
-## What Exists
-- Static HTML/CSS/vanilla JavaScript website.
-- Custom Node development server on port 4173.
-- Vercel static deployment configuration.
-- Public pages including Home, About, Club Activities, Member Network, Partnerships, Governance, Contact, Get Involved, and Events.
-- Static events data and event countdown functionality.
-- Prototype login UI in `js/main.js` using hard-coded credentials and browser `localStorage`.
-- Existing Birdie Squad spreadsheet workflow supplied by the club, including member/player names, current handicaps, game scores, rankings, differentials, history, and Order of Merit logic.
-- Project OS structure and agent-control rules.
+## Working Branch
+`agent/supabase-golf-day-mvp`
 
-## What Works
-- Public static site navigation and content.
-- Existing responsive styling and Birdie Squad branding.
-- Static event display/countdown.
-- Prototype login UI flow, but it is not secure and must not be treated as production authentication.
-- Existing spreadsheet ranks final game results from lowest to highest and provides the club's familiar operational reference.
+Do not merge to `main` or deploy to production until private preview validation is complete.
 
-## What Is Incomplete
-- No production backend.
-- No production database.
-- No real authentication provider.
-- No secure protected member/admin area.
-- No digital golf-day data model.
-- No hole-by-hole score capture.
-- No automatic live leaderboard.
-- No live digital player scorecard.
-- Events are still maintained in static JavaScript rather than a database.
-- Contact enquiries are not persisted.
+## Gate 1 — Backend Proof: COMPLETE
+Supabase project:
+- Name: Birdie Squad Golf Club
+- Organisation: Apprigate
+- Project ref: `ydrrhlpvblwgwboyuwkj`
+- Region: `eu-west-1`
 
-## Approved MVP Outcome
-The first usable prototype must support this exact journey:
-1. A real user signs in.
-2. A member sees additional event/golf-day features after login.
-3. The Events page shows a simple upcoming-events calendar.
-4. An authorised scorer/admin opens a golf day and selects participating members.
-5. One designated scorer captures scores using a mobile-friendly interface.
-6. The system calculates totals and rankings automatically.
-7. Logged-in members can see the live leaderboard remotely.
-8. A member can open an individual player's digital scorecard.
-9. A historical result imported from the supplied spreadsheet reproduces the spreadsheet's ranking as an acceptance test.
+Implemented and verified:
+- `members` roster table.
+- `user_profiles` authentication/role/approval table.
+- `golf_days` table.
+- `golf_day_players` participation table.
+- `hole_scores` digital scorecard table.
+- `live_leaderboard` security-invoker view.
+- RLS on all exposed public tables.
+- Explicit club-account approval requirement in addition to Supabase authentication.
+- Roles: `admin`, `management`, `scorer`, `member`.
+- Realtime publication for `golf_days`, `golf_day_players`, and `hole_scores`.
+- Supabase Security Advisor currently returns no findings.
+- Schema migrations recorded under `/supabase/migrations/`.
+
+## Spreadsheet Validation: PASS
+Source: `Monthly Medal APRIL@2026-3.xlsx`.
+
+Imported:
+- 83 roster members with the spreadsheet handicap reference preserved as text.
+- Historical Game 15 / STATEMINES GC.
+- 22 final player scores.
+
+The database leaderboard reproduces the spreadsheet result exactly, including tied ranks. Top five validation result:
+1. MISS CAROL SIBIYA — 71
+2. MR SLENDA SITHEBE — 72
+3. MR DUKE MAPHUNYE — 75
+4. MR VELI HLOPHE — 76
+5. MR TOM NTSHANGASE — 77
+
+A separate temporary live-scoring test also passed: three hole scores per player were inserted, totals were summed automatically, holes-completed changed to 3, and the leaderboard ranked the lower total first. The temporary test golf day was then deleted.
+
+## Gate 2 — Working Prototype: IN PROGRESS
+Feature-branch implementation now includes:
+- `css/mvp.css` for the member golf hub, calendar, leaderboard, scorecard, and Excel-familiar scorer grid.
+- `js/birdie-mvp.js` as a scoped Supabase bridge on the Events page.
+- Existing Events page now contains a Member Golf Hub mount.
+- Real Supabase email/password login replaces the hard-coded prototype login on the Events page through capture-phase interception.
+- Logged-in role is loaded from `user_profiles`.
+- Database-backed golf-day calendar.
+- Golf-day list and detail view.
+- Admin/management create-golf-day form.
+- Staff add-player flow from the imported club roster.
+- Excel-familiar scoring grid: players down the left, holes 1–18 across, total on the right.
+- Score upsert/delete on cell change.
+- Member leaderboard and individual digital scorecard.
+- Historical imported results are labelled as Excel totals rather than pretending hole-by-hole data exists.
+- Realtime subscriptions refresh leaderboard/score views when scores, players, or golf-day status change.
+- Existing Captains Day event dated 31 May 2026 is now correctly marked past rather than upcoming.
+
+## Current Required Validation
+Gate 2 still requires real authenticated browser testing with at least:
+- one approved staff/scorer/admin account;
+- one approved member account.
+
+Required tests:
+1. Staff signs in.
+2. Staff creates a test golf day.
+3. Staff adds players from the roster.
+4. Staff enters hole scores on phone/desktop.
+5. Totals/positions update.
+6. Second member session sees the change through Realtime.
+7. Member cannot modify scores.
+8. Unapproved account cannot read club/member scoring data.
+9. Logout returns to public/member-login state.
+
+## Security State
+- The browser uses only the Supabase project URL and publishable key.
+- No secret/service-role key is present in frontend code.
+- New Auth users default to role `member` but `approved = false`.
+- RLS requires `approved = true` for member golf data.
+- Staff writes require both `approved = true` and an authorised role.
+- Role/approval data is database-controlled, not user metadata.
+
+## Known Remaining Risks / Debt
+- Hard-coded prototype credentials still exist in shared `js/main.js` and therefore still affect pages other than Events. They must be removed before production merge.
+- End-to-end Auth/RLS has not yet been validated with real users.
+- Current Supabase integration is scoped to the Events page for minimum-change MVP delivery.
+- Public site events are still partly static; the member golf calendar is database-backed.
+- Contact enquiries still use `mailto:` and are not persisted; this remains a separate reliability issue outside this golf-day MVP gate.
+- Current deployment ownership/Vercel preview still needs revalidation before Gate 3.
 
 ## Scope Lock: Not Part of MVP
-Do not build GPS, maps/course tracking, automatic handicap adjustment, handicap differential automation, Admin Points, Order of Merit automation, personal statistics, friends/social feeds, messaging, Ryder Cup formats, multi-round tournaments, smartwatch features, payments, sponsor dashboards, or a general CRM.
+Do not build GPS, automatic handicap/differential calculations, Admin Points, Order of Merit automation, advanced statistics, friends/social feeds, messaging, Ryder Cup formats, multi-round tournaments, smartwatch integration, payments, sponsor dashboards, or CRM features.
 
 ## UX Non-Negotiable
-The scorer must immediately recognise the workflow from the existing spreadsheet. Do not introduce a complex golf-management interface. Preserve familiar concepts: Game/Golf Day, Venue, Date, Player, Handicap, Score, Position. Make the mobile workflow obvious without training.
+The scorer must recognise the club's spreadsheet workflow immediately. Preserve familiar concepts and layout: Game/Golf Day, Venue, Date, Player, Handicap, holes/scores, Total, Position. Optimise for simple phone use and minimal training.
 
-## Current Blocker
-A new dedicated Supabase project is not yet created. Supabase reports that a new project in the connected Apprigate organisation currently costs R0/month. Creation requires explicit user confirmation before proceeding.
-
-## Known Risks
-- Existing hard-coded credentials are public and must be removed from production use.
-- Role enforcement must happen through Supabase Auth/RLS, not browser-only hiding.
-- Supabase secret/service-role keys must never be exposed in the static frontend.
-- Do not blindly reproduce complex handicap formulas before the club validates the MVP.
-- Do not migrate every Excel sheet; migrate the workflow, roster, current handicap reference, and validation data needed for the MVP.
-- Realtime must remain simple and appropriate for prototype scale.
-
-## What Needs Validation
-- Supabase project creation and health.
-- Database schema and RLS policies.
-- Real authentication and role enforcement.
-- Mobile scorer workflow.
-- Historical spreadsheet ranking parity.
-- Live leaderboard updates in a second logged-in session.
-- Events calendar and member-only event enhancements.
-- Vercel preview deployment before production merge.
+## Next Blocker Requiring User Input
+One real email address is required to bootstrap the first pilot login safely. Once the Auth user exists, ChatGPT can approve it and assign the intended role in the database. A second member account is then required for true two-session Realtime/RLS validation.
 
 ## Last Updated
-2026-08-15 — ChatGPT/GitHub/Supabase audit and MVP planning. No application source code changed in this planning step.
+2026-08-15 — ChatGPT + GitHub + Supabase. Gate 1 completed and Gate 2 feature-branch implementation advanced to authenticated-browser testing gate.
