@@ -1,0 +1,62 @@
+name: Birdie MVP Check
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [agent/supabase-golf-day-mvp]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: JavaScript syntax check
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in js/*.js scripts/*.js; do
+            node --check "$file"
+          done
+
+      - name: Confirm no backend secret is shipped
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RIn --exclude-dir=.git --exclude='*.md' --exclude='*.sql' -E 'service_role|sb_secret_' .; then
+            echo 'A backend secret marker was found in shipped application files.' >&2
+            exit 1
+          fi
+
+      - name: Static build check
+        run: npm run build
+
+      - name: Local server smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/dev-server.js --port 4173 > /tmp/birdie-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID || true' EXIT
+          for attempt in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:4173/events >/tmp/events.html; then
+              break
+            fi
+            sleep 0.25
+          done
+          curl --fail --silent http://127.0.0.1:4173/js/birdie-mvp.js >/tmp/birdie-mvp.js
+          curl --fail --silent http://127.0.0.1:4173/js/birdie-public-events.js >/tmp/birdie-public-events.js
+          grep -q 'member-golf-mount' /tmp/events.html
+          grep -q 'SUPABASE_PUBLISHABLE_KEY' /tmp/birdie-mvp.js
+          grep -q 'loadPublicGolfDays' /tmp/birdie-public-events.js
