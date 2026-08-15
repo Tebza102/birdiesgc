@@ -90,3 +90,50 @@ Pass
 
 **Next action:**
 - Add the missing master operating prompt file to `project-os/10-prompts` if future prompt-level integration is required.
+
+### 2026-08-15 20:40 — Birdie Squad Golf-Day MVP Gate 1 + Gate 2 Foundation
+
+**Changed by:** ChatGPT using GitHub and Supabase connectors
+
+**Files changed:**
+- events.html
+- js/birdie-mvp.js
+- js/events-data.js
+- css/mvp.css
+- project-os/00-start-here/current-status.md
+- project-os/00-start-here/next-action.md
+- project-os/04-technical/architecture.md
+- project-os/04-technical/auth-and-roles.md
+- project-os/04-technical/data-model.md
+- project-os/04-technical/tech-stack.md
+- project-os/10-prompts/birdie-golf-day-mvp-master-build-prompt.md
+- supabase/migrations/20260815182736_birdie_squad_mvp_foundation.sql
+- supabase/migrations/20260815182835_harden_updated_at_function.sql
+- supabase/migrations/20260815182852_optimize_rls_write_policies.sql
+- supabase/migrations/20260815183930_require_approved_club_accounts.sql
+- supabase/seed_historical_game15.sql
+
+**Summary:**
+Created and secured the dedicated Birdie Squad Supabase backend, imported the existing club roster and Game 15 spreadsheet validation dataset, proved ranking parity with Excel, and implemented the first Events-page member golf hub on a feature branch. The UI intentionally uses a spreadsheet-familiar score-entry grid rather than a complex golf-management design. New Auth accounts require explicit club approval before protected data is visible.
+
+**Tests run:**
+- Supabase project health verified.
+- Applied four recorded database migrations.
+- Imported 83 roster members and 22 Game 15 results.
+- Queried `live_leaderboard` and confirmed exact spreadsheet ranking parity including ties.
+- Created temporary live-scoring test data, entered three hole scores for two players, confirmed automatic hole count/score total/rank, then deleted test data.
+- Confirmed historical validation golf day is invisible to anonymous role.
+- Supabase Security Advisor rerun after RLS/auth changes: zero findings.
+- Re-fetched `js/birdie-mvp.js` from the feature branch in sections to inspect the committed integration and event-handler order.
+- Compared feature branch against `main`; branch remains isolated and ahead with only intended MVP/Project-OS/Supabase files.
+
+**Result:**
+Pass for Gate 1. Gate 2 implementation is ready for real authenticated browser validation.
+
+**Risks remaining:**
+- No real Supabase Auth pilot accounts exist yet, so role/RLS/Reatime behaviour has not been proven in two browser sessions.
+- Shared `js/main.js` still contains old hard-coded prototype credentials outside the scoped Events-page bridge; remove before production merge.
+- Private Vercel preview/deployment still requires validation.
+
+**Next action:**
+- Bootstrap one approved staff account and one approved member account, run the two-session scoring test, then remove legacy shared auth before preparing the private chairman preview.
