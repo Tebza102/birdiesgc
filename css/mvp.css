@@ -1,0 +1,641 @@
+/* Birdie Squad MVP member golf hub */
+.member-golf-section {
+    padding: var(--spacing-xxl) 0;
+    background: var(--bg-light-green);
+}
+
+.member-golf-shell {
+    display: grid;
+    gap: var(--spacing-lg);
+}
+
+.mvp-loading,
+.mvp-empty,
+.mvp-state-card,
+.mvp-login-card,
+.mvp-panel,
+.mvp-day-detail,
+.mvp-scorecard-card {
+    background: var(--bg-white);
+    border: 1px solid rgba(65, 120, 69, 0.14);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+}
+
+.mvp-loading,
+.mvp-empty,
+.mvp-state-card {
+    padding: var(--spacing-lg);
+    color: var(--text-medium);
+}
+
+.mvp-state-error {
+    border-color: rgba(180, 55, 55, 0.28);
+}
+
+.mvp-login-card {
+    padding: var(--spacing-lg);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-lg);
+}
+
+.mvp-login-card p:last-child,
+.mvp-panel-heading p:last-child,
+.mvp-small-note,
+.mvp-member-bar p,
+.mvp-day-hero p {
+    margin-bottom: 0;
+}
+
+.mvp-eyebrow {
+    margin-bottom: 0.25rem;
+    color: var(--primary-green);
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.mvp-member-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.85rem 1rem;
+    border-radius: var(--radius-md);
+    background: var(--primary-green);
+    color: var(--text-white);
+}
+
+.mvp-member-bar strong {
+    display: block;
+    overflow-wrap: anywhere;
+}
+
+.mvp-member-bar .mvp-eyebrow {
+    color: rgba(255, 255, 255, 0.72);
+}
+
+.mvp-role-pill,
+.mvp-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    padding: 0.35rem 0.7rem;
+    font-size: 0.76rem;
+    font-weight: 800;
+    line-height: 1;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.mvp-role-pill {
+    color: var(--primary-green);
+    background: var(--bg-white);
+}
+
+.mvp-status {
+    color: var(--text-medium);
+    background: var(--bg-off-white);
+}
+
+.mvp-status-live {
+    color: #0f5b2d;
+    background: #dff4e6;
+}
+
+.mvp-status-scheduled {
+    color: #6d5210;
+    background: #f7edcf;
+}
+
+.mvp-status-closed {
+    color: #4f5457;
+    background: #e9ecee;
+}
+
+.mvp-status-cancelled {
+    color: #7b3030;
+    background: #f4dddd;
+}
+
+.mvp-hub-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+    gap: var(--spacing-lg);
+}
+
+.mvp-panel {
+    padding: var(--spacing-lg);
+    min-width: 0;
+}
+
+.mvp-panel-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: var(--spacing-md);
+}
+
+.mvp-panel-heading h3 {
+    margin-bottom: 0.25rem;
+}
+
+.mvp-calendar {
+    border: 1px solid #dbe4dc;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: var(--bg-white);
+}
+
+.mvp-calendar-toolbar {
+    display: grid;
+    grid-template-columns: 40px 1fr 40px;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.65rem;
+    background: var(--bg-off-white);
+    border-bottom: 1px solid #dbe4dc;
+}
+
+.mvp-calendar-toolbar h4 {
+    text-align: center;
+    font-size: 1rem;
+}
+
+.mvp-icon-button {
+    width: 36px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-md);
+    background: var(--bg-white);
+    border: 1px solid #dbe4dc;
+    color: var(--primary-green);
+    font-weight: 800;
+}
+
+.mvp-calendar-weekdays,
+.mvp-calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.mvp-calendar-weekdays {
+    background: #f7f8f6;
+    border-bottom: 1px solid #e4e9e3;
+}
+
+.mvp-calendar-weekdays span {
+    padding: 0.45rem 0.25rem;
+    text-align: center;
+    color: var(--text-light);
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+.mvp-calendar-cell {
+    min-height: 72px;
+    padding: 0.35rem;
+    border-right: 1px solid #eef1ed;
+    border-bottom: 1px solid #eef1ed;
+    background: var(--bg-white);
+    overflow: hidden;
+}
+
+.mvp-calendar-cell:nth-child(7n) {
+    border-right: 0;
+}
+
+.mvp-calendar-cell.is-empty {
+    background: #fafbfa;
+}
+
+.mvp-calendar-cell.has-event {
+    background: #f5faf5;
+}
+
+.mvp-calendar-number {
+    display: block;
+    margin-bottom: 0.25rem;
+    color: var(--text-medium);
+    font-size: 0.76rem;
+    font-weight: 700;
+}
+
+.mvp-calendar-event {
+    width: 100%;
+    padding: 0.28rem 0.35rem;
+    border-radius: 5px;
+    background: var(--primary-green);
+    color: var(--text-white);
+    font-size: 0.66rem;
+    font-weight: 700;
+    line-height: 1.2;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mvp-day-list {
+    display: grid;
+    gap: 0.55rem;
+}
+
+.mvp-day-row {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.85rem;
+    border: 1px solid #e0e7e0;
+    border-radius: var(--radius-md);
+    background: var(--bg-white);
+    text-align: left;
+}
+
+.mvp-day-row:hover,
+.mvp-day-row.is-active {
+    border-color: var(--primary-green);
+    background: #f5faf5;
+}
+
+.mvp-day-row strong,
+.mvp-day-row small {
+    display: block;
+}
+
+.mvp-day-row small {
+    margin-top: 0.2rem;
+    color: var(--text-light);
+}
+
+.mvp-admin-details {
+    margin-top: var(--spacing-md);
+    border-top: 1px solid #e1e8e1;
+    padding-top: var(--spacing-md);
+}
+
+.mvp-admin-details summary {
+    color: var(--primary-green);
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.mvp-form-grid {
+    margin-top: var(--spacing-md);
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.85rem;
+}
+
+.mvp-form-grid label,
+.mvp-inline-form label {
+    display: grid;
+    gap: 0.35rem;
+    color: var(--text-medium);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.mvp-form-grid input,
+.mvp-inline-form select {
+    width: 100%;
+    min-height: 42px;
+    padding: 0.6rem 0.7rem;
+    border: 1px solid #d6ded7;
+    border-radius: var(--radius-md);
+    background: var(--bg-white);
+    color: var(--text-dark);
+    font: inherit;
+}
+
+.mvp-span-2 {
+    grid-column: span 2;
+}
+
+.mvp-check {
+    display: flex !important;
+    grid-template-columns: none !important;
+    align-items: center;
+    gap: 0.5rem !important;
+}
+
+.mvp-check input {
+    width: auto;
+    min-height: auto;
+}
+
+.mvp-day-detail {
+    padding: var(--spacing-lg);
+    overflow: hidden;
+}
+
+.mvp-day-hero {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--spacing-lg);
+    padding-bottom: var(--spacing-md);
+    border-bottom: 1px solid #e3e9e3;
+}
+
+.mvp-day-hero h2 {
+    margin-bottom: 0.35rem;
+}
+
+.mvp-status-actions,
+.mvp-inline-form {
+    display: flex;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    margin-top: var(--spacing-md);
+}
+
+.mvp-inline-form label {
+    min-width: min(100%, 330px);
+    flex: 1;
+}
+
+.mvp-leaderboard,
+.mvp-score-entry {
+    margin-top: var(--spacing-lg);
+}
+
+.mvp-table-wrap,
+.mvp-score-grid-wrap {
+    width: 100%;
+    overflow-x: auto;
+    border: 1px solid #dfe6df;
+    border-radius: var(--radius-md);
+    background: var(--bg-white);
+}
+
+.mvp-leaderboard-table,
+.mvp-score-grid {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.86rem;
+}
+
+.mvp-leaderboard-table th,
+.mvp-leaderboard-table td,
+.mvp-score-grid th,
+.mvp-score-grid td {
+    border-bottom: 1px solid #edf0ec;
+    padding: 0.65rem;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.mvp-leaderboard-table th,
+.mvp-score-grid thead th {
+    background: var(--primary-green);
+    color: var(--text-white);
+    font-weight: 800;
+}
+
+.mvp-leaderboard-table td:nth-child(2),
+.mvp-leaderboard-table th:nth-child(2) {
+    text-align: left;
+}
+
+.mvp-position,
+.mvp-score-total {
+    font-size: 1rem;
+    font-weight: 800;
+}
+
+.mvp-link-button {
+    color: var(--primary-green);
+    font-size: 0.8rem;
+    font-weight: 800;
+    text-decoration: underline;
+}
+
+.mvp-score-grid {
+    min-width: 1320px;
+}
+
+.mvp-score-grid th,
+.mvp-score-grid td {
+    padding: 0.3rem;
+}
+
+.mvp-player-sticky {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    min-width: 220px;
+    max-width: 220px;
+    text-align: left !important;
+    background: #f8faf7 !important;
+    color: var(--text-dark) !important;
+    border-right: 1px solid #dfe6df;
+}
+
+.mvp-score-grid thead .mvp-player-sticky {
+    z-index: 5;
+    background: var(--primary-green) !important;
+    color: var(--text-white) !important;
+}
+
+.mvp-player-sticky strong,
+.mvp-player-sticky small {
+    display: block;
+}
+
+.mvp-player-sticky small {
+    margin-top: 0.12rem;
+    color: var(--text-light);
+    font-weight: 500;
+}
+
+.mvp-score-grid thead .mvp-player-sticky small {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.mvp-score-input {
+    width: 48px;
+    height: 38px;
+    border: 1px solid #cfd8cf;
+    border-radius: 6px;
+    text-align: center;
+    font: inherit;
+    font-weight: 700;
+    background: var(--bg-white);
+}
+
+.mvp-score-input:focus {
+    outline: 2px solid rgba(65, 120, 69, 0.25);
+    border-color: var(--primary-green);
+}
+
+.mvp-score-input.is-saving {
+    opacity: 0.55;
+}
+
+.mvp-score-input.is-saved {
+    border-color: var(--secondary-green);
+    background: #edf8ef;
+}
+
+.mvp-score-input.is-error {
+    border-color: #b73b3b;
+    background: #fff2f2;
+}
+
+.mvp-imported-cell {
+    color: #a0a6a0;
+    background: #f7f8f6;
+}
+
+.mvp-total-sticky {
+    position: sticky;
+    right: 0;
+    z-index: 3;
+    min-width: 70px;
+    background: #f6f0df !important;
+    color: #4f421d !important;
+    border-left: 1px solid #e4d7ad;
+}
+
+.mvp-score-grid thead .mvp-total-sticky {
+    z-index: 5;
+    background: var(--accent-gold) !important;
+    color: var(--text-white) !important;
+}
+
+.mvp-total-sticky strong,
+.mvp-total-sticky small {
+    display: block;
+}
+
+.mvp-total-sticky small {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+}
+
+.mvp-small-note {
+    margin-top: 0.65rem;
+    color: var(--text-light);
+    font-size: 0.78rem;
+}
+
+.mvp-scorecard-card {
+    position: relative;
+    margin-top: var(--spacing-md);
+    padding: var(--spacing-md);
+    border-left: 4px solid var(--accent-gold);
+}
+
+.mvp-scorecard-close {
+    position: absolute;
+    top: 0.6rem;
+    right: 0.7rem;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--bg-off-white);
+    color: var(--text-medium);
+    font-size: 1.2rem;
+}
+
+.mvp-mini-scorecard {
+    display: grid;
+    grid-template-columns: repeat(9, minmax(52px, 1fr));
+    gap: 0.4rem;
+    margin-top: 0.8rem;
+    overflow-x: auto;
+}
+
+.mvp-mini-scorecard > div {
+    min-width: 52px;
+    padding: 0.5rem 0.25rem;
+    border-radius: 6px;
+    background: var(--bg-off-white);
+    text-align: center;
+}
+
+.mvp-mini-scorecard span,
+.mvp-mini-scorecard strong {
+    display: block;
+}
+
+.mvp-mini-scorecard span {
+    color: var(--text-light);
+    font-size: 0.68rem;
+    font-weight: 700;
+}
+
+.mvp-scorecard-total {
+    margin-top: 0.85rem;
+    color: var(--text-medium);
+    font-size: 0.9rem;
+}
+
+.mvp-scorecard-total strong {
+    margin-left: 0.35rem;
+    color: var(--primary-green);
+    font-size: 1.35rem;
+}
+
+@media (max-width: 900px) {
+    .mvp-hub-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 640px) {
+    .member-golf-section,
+    .mvp-day-detail,
+    .mvp-panel {
+        padding-left: var(--spacing-sm);
+        padding-right: var(--spacing-sm);
+    }
+
+    .mvp-login-card,
+    .mvp-day-hero,
+    .mvp-member-bar {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .mvp-login-card .btn {
+        width: 100%;
+    }
+
+    .mvp-calendar-cell {
+        min-height: 58px;
+        padding: 0.2rem;
+    }
+
+    .mvp-calendar-weekdays span {
+        font-size: 0.6rem;
+    }
+
+    .mvp-calendar-event {
+        padding: 0.2rem;
+        font-size: 0.56rem;
+    }
+
+    .mvp-form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .mvp-span-2 {
+        grid-column: auto;
+    }
+
+    .mvp-mini-scorecard {
+        grid-template-columns: repeat(6, minmax(52px, 1fr));
+    }
+}
