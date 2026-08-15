@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Club Scoring | Birdie Squad Golf Club</title>
+    <meta name="description" content="Birdie Squad Golf Club digital scorecard and live leaderboard.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/club-scoring.css">
+    <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
+</head>
+<body>
+    <header class="header">
+        <div class="container header-container">
+            <a href="index.html" class="logo"><img src="images/Birdie_Logo.png" alt="Birdie Squad Golf Club" class="logo-img"></a>
+            <nav class="nav nav-desktop">
+                <ul class="nav-list">
+                    <li><a href="index.html" class="nav-link">Home</a></li>
+                    <li><a href="events.html" class="nav-link">Events</a></li>
+                    <li><a href="club-scoring.html" class="nav-link active">Club Scoring</a></li>
+                    <li><a href="member-network.html" class="nav-link">Member Network</a></li>
+                    <li><a href="contact.html" class="nav-link">Contact</a></li>
+                </ul>
+            </nav>
+            <div class="header-cta">
+                <a href="events.html" class="btn btn-primary">Events</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="scoring-page">
+        <section class="scoring-hero">
+            <div class="container scoring-hero-inner">
+                <div>
+                    <p class="scoring-kicker">Birdie Squad Club Scoring</p>
+                    <h1>Digital Scorecard & Live Results</h1>
+                    <p>Built to feel familiar: the same player-and-score view the club already uses in Excel, now available live.</p>
+                </div>
+                <div class="scoring-connection-card">
+                    <span class="connection-dot"></span>
+                    <div>
+                        <strong>Club scoring</strong>
+                        <p id="scoring-status" data-kind="info">Connecting…</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="container scoring-shell">
+            <section id="login-panel" class="scoring-card login-card">
+                <div>
+                    <p class="eyebrow">Member access</p>
+                    <h2>Sign in</h2>
+                    <p>Use the email and password assigned to your Birdie Squad account.</p>
+                </div>
+                <form id="login-form" class="scoring-form">
+                    <label for="login-email">Email</label>
+                    <input id="login-email" type="email" autocomplete="email" required placeholder="member@example.com">
+                    <label for="login-password">Password</label>
+                    <input id="login-password" type="password" autocomplete="current-password" required placeholder="Password">
+                    <button class="btn btn-primary" type="submit">Sign In</button>
+                </form>
+            </section>
+
+            <section id="pending-panel" class="scoring-card" hidden>
+                <p class="eyebrow">Account connected</p>
+                <h2>Waiting for club approval</h2>
+                <p>Your login is working. A club administrator must approve the account before club scorecards are visible.</p>
+                <button id="logout-button" class="btn btn-outline" type="button">Sign Out</button>
+            </section>
+
+            <section id="member-panel" hidden>
+                <div class="scoring-toolbar scoring-card">
+                    <div>
+                        <p class="eyebrow">Signed in</p>
+                        <strong id="current-user-label">Member</strong>
+                    </div>
+                    <div class="toolbar-actions">
+                        <label for="golf-day-select">Golf day</label>
+                        <select id="golf-day-select"></select>
+                        <button id="logout-button" class="btn btn-outline" type="button">Sign Out</button>
+                    </div>
+                </div>
+
+                <section class="scoring-card leaderboard-card">
+                    <div class="leaderboard-heading">
+                        <div>
+                            <p class="eyebrow">Club results</p>
+                            <h2 id="golf-day-title">Golf Day</h2>
+                            <p id="golf-day-meta" class="muted"></p>
+                        </div>
+                        <span id="golf-day-status" class="status-badge">—</span>
+                    </div>
+
+                    <div class="spreadsheet-note">
+                        <strong>Familiar view:</strong> position, player, handicap and score — the same core information the club already consolidates in Excel.
+                    </div>
+
+                    <div class="table-scroll">
+                        <table class="leaderboard-table">
+                            <thead>
+                                <tr>
+                                    <th>Pos</th>
+                                    <th>Player</th>
+                                    <th>H/Cap</th>
+                                    <th>Thru</th>
+                                    <th>Score</th>
+                                </tr>
+                            </thead>
+                            <tbody id="leaderboard-body"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section id="staff-panel" class="scoring-card scorer-card" hidden>
+                    <div>
+                        <p class="eyebrow">Authorised scorer</p>
+                        <h2>Enter a score</h2>
+                        <p class="muted">One scorer captures the card. Save each hole and the leaderboard refreshes for members.</p>
+                    </div>
+                    <form id="score-entry-form" class="score-entry-grid">
+                        <div>
+                            <label for="score-player-select">Player</label>
+                            <select id="score-player-select" required></select>
+                        </div>
+                        <div>
+                            <label for="score-hole">Hole</label>
+                            <input id="score-hole" type="number" min="1" max="18" value="1" required>
+                        </div>
+                        <div>
+                            <label for="score-strokes">Strokes</label>
+                            <input id="score-strokes" type="number" min="1" max="30" inputmode="numeric" required>
+                        </div>
+                        <button class="btn btn-primary save-score-button" type="submit">Save & Update</button>
+                    </form>
+                </section>
+            </section>
+        </section>
+    </main>
+
+    <dialog id="scorecard-dialog" class="scorecard-dialog">
+        <div class="scorecard-dialog-head">
+            <div>
+                <p class="eyebrow">Digital scorecard</p>
+                <h2 id="scorecard-name">Player</h2>
+                <p id="scorecard-total" class="muted"></p>
+            </div>
+            <button id="scorecard-close" class="dialog-close" type="button" aria-label="Close">×</button>
+        </div>
+        <div id="scorecard-grid" class="scorecard-grid"></div>
+    </dialog>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/dist/umd/supabase.min.js"></script>
+    <script src="js/birdie-supabase.js"></script>
+    <script src="js/club-scoring.js"></script>
+</body>
+</html>
