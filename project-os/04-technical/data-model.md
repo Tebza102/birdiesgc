@@ -1,71 +1,106 @@
 # Data Model
 
 ## Design Principle
-Model the club's real golf-day workflow rather than reproducing Excel sheet-for-sheet. The spreadsheet remains the behavioural reference and seed source. The MVP database must be small enough to understand and safe enough to test for several months.
+Model the club's real golf-day workflow, not the Excel workbook sheet-for-sheet and not a generic golf application. The spreadsheet is the behavioural reference and validation source. The pilot schema deliberately contains only what is needed for roster, golf days, score entry, live totals/ranking and role-based access.
 
-## Main Entities
+## Implemented Entities
 | Entity | Purpose | Key Fields | Relationships |
 |---|---|---|---|
-| `members` | Club/player roster independent of login accounts | id, full_name, email?, current_handicap?, active, legacy_name | Referenced by golf-day participants; optionally linked to profile |
-| `profiles` | Authenticated app user and role | id=auth user id, member_id?, full_name, role, active | Optional link to member |
-| `courses` | Reusable golf-course identity | id, name, active | Has course holes; referenced by golf days |
-| `course_holes` | Hole metadata | course_id, hole_number, par, stroke_index? | Belongs to course |
-| `golf_days` | One club game/event being scored | id, game_number?, title, date, venue, course_id?, status | Has participating players |
-| `golf_day_players` | Player participation and snapshot | id, golf_day_id, member_id, handicap_at_start?, status | Belongs to golf day/member; has hole scores |
-| `hole_scores` | Digital scorecard entries | id, golf_day_player_id, hole_number, strokes, updated_by, updated_at | Belongs to one golf-day player |
+| `members` | Club/player roster independent of login accounts | id, full_name, email?, current_handicap?, active, source_type, source_reference | Referenced by golf-day participants; optionally linked to Auth profile |
+| `user_profiles` | Application authorisation record for an Auth user | id=auth user id, member_id?, role, approved | Optional link to member |
+| `golf_days` | One club game/event being scored | id, game_number?, title, venue, event_date?, status, scoring_method, hole_count, is_public | Has participating players |
+| `golf_day_players` | A roster member participating in one golf day | id, golf_day_id, member_id, handicap_at_start?, score_source, final_score_override? | Belongs to golf day/member; has hole scores |
+| `hole_scores` | Hole-by-hole digital scorecard entries | id, golf_day_player_id, hole_number, strokes, updated_by, updated_at | Belongs to one golf-day player |
+| `live_leaderboard` | Security-invoker derived view for member results | golf_day_player_id, player_name, holes_completed, total_score, position | Aggregates participants + hole scores |
 
-## Suggested Status Values
-`golf_days.status`: `draft`, `open`, `live`, `final`.
-`golf_day_players.status`: `playing`, `withdrawn`, `finished` where needed; default should be simple.
+## Explicitly Not Modelled Yet
+There are no MVP tables for course GPS, course-hole metadata, handicap differentials, Order of Merit, Admin Points, personal statistics, teams, tournaments, payments, social feeds or sponsor administration. Add them only after pilot usage proves the requirement.
+
+## Status Values
+`golf_days.status`:
+- `scheduled`
+- `live`
+- `closed`
+- `cancelled`
+
+## Scoring Method
+The only current scoring method is `gross_stroke_v1`.
+
+For a live participant:
+- `holes_completed` = count of recorded hole-score rows.
+- `total_score` = sum of recorded strokes.
+- lower total ranks higher.
+- PostgreSQL `rank()` is used so ties reproduce the spreadsheet's ranking behaviour.
+
+For a historical Excel-only participant:
+- `score_source = imported_total`.
+- `final_score_override` stores the spreadsheet's final score.
+- `holes_completed` is presented as the full golf day for historical ranking display.
+- the UI must state that no hole-by-hole history exists rather than fabricating a digital card.
 
 ## Core Constraints
-- One `course_holes` row per course + hole number.
-- Hole number must be 1 through 18 for the first MVP.
-- Par must be a positive sensible integer.
 - One participant row per member per golf day.
 - One score row per participant per hole.
-- Strokes must be a positive integer when present.
-- `updated_by` should identify the authenticated scorer/user making the change.
-- Do not delete historical golf days casually; prefer final/archive behaviour later if needed.
-
-## Leaderboard Derivation
-For the first validated scoring mode:
-- `holes_completed` = count of recorded hole scores for player.
-- `total_score` = sum of recorded strokes.
-- `position` = rank according to the club's approved MVP ranking rule, initially validated against the supplied spreadsheet where lower final score ranks higher.
-
-Do not implement unverified net-score, Stableford, handicap-differential, Admin Points, or Order of Merit calculations in this MVP.
+- Hole number must be 1–18.
+- Strokes must be an integer from 1–30 when present.
+- `hole_count` is 1–18; default is 18.
+- `score_source` is `live` or `imported_total`.
+- `user_profiles.role` is `admin`, `management`, `scorer`, or `member`.
+- New users default to `approved = false`.
+- `updated_by` records the Auth user responsible for live score changes where supplied by the client session.
 
 ## Spreadsheet Mapping
-- `Player details` → seed `members.full_name` and reliable current-handicap reference.
-- `Games` → historical golf-day validation data and final scores.
-- `Ranking` → acceptance-test expected ordering.
-- `Handicaps`, `Differentials`, `Players History`, `Admin Points`, `OoM`, `Order of Merit` → reference only for later phases; do not automate yet.
+- `Player details` → `members.full_name` plus the current handicap reference preserved as text.
+- `Games` → historical `golf_days` and `golf_day_players.final_score_override` validation data.
+- `Ranking` → expected ordering acceptance test.
+- `Handicaps`, `Differentials`, `Players History`, `Admin Points`, `OoM`, `Order of Merit` → reference only; not automated in MVP.
 
-The spreadsheet's column-per-player structure must not be copied into Postgres. Normalise each player participation and each hole score into rows.
+The spreadsheet's column-per-player structure is intentionally not copied into Postgres. Player participation and hole scores are normalised into rows.
+
+## Current Validation Dataset
+Source workbook: `Monthly Medal APRIL@2026-3.xlsx`.
+
+Imported into Supabase:
+- 83 roster members.
+- Game 15 / STATEMINES GC.
+- 22 player final scores.
+
+The `live_leaderboard` view reproduces the spreadsheet ranking exactly, including ties. The seed SQL is recorded at `/supabase/seed_historical_game15.sql`.
 
 ## Auth Separation
-A roster member does not require an Auth user. This allows all existing players to appear in golf days immediately while only chairman/management/scorer/test members need accounts during the pilot.
+A roster member does not require an Auth account. This allows the full club roster to be used in score capture immediately while only a handful of chairman/management/scorer/member pilot users receive logins.
+
+An Auth session is also not sufficient by itself. RLS requires `user_profiles.approved = true` before protected club scoring data is visible.
 
 ## Security Considerations
-- Enable RLS on every exposed table.
-- Public/anon may read only approved published event fields/data.
-- Authenticated members may read approved golf-day/score data.
-- Only scorer/management/admin roles may insert/update score rows.
-- Role policy design must be tested for direct API access, not only UI behaviour.
-- No secrets belong in database rows exposed to frontend clients.
+- RLS is enabled on every exposed public table.
+- Anonymous access is limited to `golf_days` where `is_public = true`.
+- Approved Auth users may read protected golf-day scoring data.
+- Staff writes require approved account + authorised database role.
+- `live_leaderboard` uses `security_invoker = true` so underlying RLS remains effective.
+- The frontend uses only the Supabase project URL and publishable key.
+- Roles and approval are not stored in user-editable metadata.
 
 ## Realtime
-Enable Realtime only for tables required to refresh the live experience, principally `hole_scores` and, if necessary, `golf_days`. Keep subscriptions scoped to the active golf day where possible.
+The Supabase Realtime publication includes:
+- `golf_days`
+- `golf_day_players`
+- `hole_scores`
+
+The Events MVP client subscribes to these changes and refreshes the active golf day. This is intentionally simple for pilot scale.
 
 ## Data Lifecycle
-1. Import roster once from spreadsheet.
-2. Admin/scorer creates golf day.
-3. Participants selected from members.
-4. Scorer records hole scores during play.
-5. Members read totals/ranking live.
-6. Golf day becomes `final` after scoring completes.
-7. Historical result remains readable and becomes future input for later statistics features.
+1. Import club roster once from the spreadsheet.
+2. Management/admin creates a golf day.
+3. Staff selects participants from `members`.
+4. Scorer records hole scores.
+5. Database derives holes completed, total score and position.
+6. Approved members view leaderboard/scorecards live.
+7. Management closes the golf day when scoring is complete.
+8. Historical results remain available for later features, but do not automatically trigger handicap/Order-of-Merit logic in the MVP.
 
-## Migration Notes
-Future phases may add scoring formats, handicap calculations, Order of Merit, player statistics, teams/tournaments, media, GPS/course data and richer audit history. Do not pre-build these schemas in MVP.
+## Migration Source of Truth
+Applied Supabase migrations are mirrored in `/supabase/migrations/` using the same migration versions returned by the connected Supabase project.
+
+## Migration Notes for Later
+Future phases may add verified scoring formats, handicap calculation, Order of Merit, player statistics, course/hole metadata, teams/tournaments, media and GPS. Do not pre-build these schemas during the pilot.
