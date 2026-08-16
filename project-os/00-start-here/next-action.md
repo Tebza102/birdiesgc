@@ -6,7 +6,7 @@ Complete real-browser/device validation of the live scorer and the new Excel wor
 ## Gate Status
 - Gate 1 — Backend/database/RLS/spreadsheet validation: **COMPLETE**.
 - Gate 2 — Auth/calendar/scorer/digital scorecard/live leaderboard: **ENGINEERING COMPLETE; REAL-BROWSER/DEVICE VALIDATION IN PROGRESS**.
-- Gate 2B — Admin Excel workbook upload/import for legacy continuity and backup: **ENGINEERING COMPLETE (preview, conservative matching, atomic admin-gated RPC, audit trail, 15 passing unit tests); REAL-WORKBOOK ACCEPTANCE TESTING REQUIRED**.
+- Gate 2B — Admin Excel workbook upload/import for legacy continuity and backup: **CORRECTED AGAINST THE REAL WORKBOOK (preview, safe null-date-tolerant matching, atomic admin-gated RPC, audit trail, 24 passing unit tests, ordinary hub no longer depends on the migration); MIGRATION NOT YET APPLIED LIVE, THEN NEEDS REAL-WORKBOOK ACCEPTANCE**.
 - Gate 3 — Private chairman/member preview: **NOT STARTED** (needs a Vercel project link).
 
 ## Private Acceptance-Test Golf Day
@@ -30,8 +30,8 @@ This record is disposable acceptance-test data and must not be treated as a real
 6. After live-scorer acceptance passes, implement the locked Excel upload/import requirement described below.
 7. Link a Vercel project for this repo to get a shareable private preview URL.
 
-## Locked Requirement — Excel Workbook Upload / Legacy Backup — IMPLEMENTED, NEEDS REAL-WORKBOOK ACCEPTANCE
-An approved admin can now upload the club's latest `.xlsx` workbook from the platform (`Import Latest Club Workbook` on the Events member hub) so newer legacy games can be brought into Supabase without manual recapture. Implementation detail: `project-os/04-technical/data-model.md` → "Admin Workbook Import"; migration `supabase/migrations/20260816120000_legacy_workbook_import.sql`. What remains is a human uploading the club's actual current workbook to confirm the preview/import against real data — this was built and unit-tested against the documented/validated layout only, since the real latest workbook was not available in this environment.
+## Locked Requirement — Excel Workbook Upload / Legacy Backup — CORRECTED, NOT YET APPLIED LIVE
+An approved admin can upload the club's latest `.xlsx` workbook from the platform (`Import Latest Club Workbook` on the Events member hub) so newer legacy games can be brought into Supabase without manual recapture. A first implementation pass was corrected after direct inspection of the real workbook found the parsing fixtures didn't match it (`project-os/10-prompts/claude-fix-excel-import-actual-workbook.md`): horizontal `Player details` parsing, `Game N` text-label game numbers, Games-header-driven score-column mapping, and safe game_number+venue+date fallback matching so a null `event_date` on the seeded Game 15 can be enriched by a later workbook without duplicating it. A real-browser regression where the ordinary Golf Hub broke on a project without the migration applied was also fixed — `loadGolfDays()` no longer depends on any Gate 2B column. Implementation detail: `project-os/04-technical/data-model.md` → "Admin Workbook Import"; migration `supabase/migrations/20260816120000_legacy_workbook_import.sql` (**intentionally not yet applied to the live Supabase project**). What remains: review and apply the migration, then a human uploads the club's actual current workbook to confirm the preview/import against real data — this was built and unit-tested (24 passing checks) against fixtures that mirror the real workbook layout, since the real workbook file itself was not available in this environment.
 
 Purpose:
 - Keep the digital platform current with games that still exist only in the club workbook.

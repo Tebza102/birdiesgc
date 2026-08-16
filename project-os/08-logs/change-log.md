@@ -238,3 +238,44 @@ Pass for everything achievable without a live Supabase project or a real club wo
 
 **Next action:**
 - A human admin should upload the club's actual latest `.xlsx` workbook on the Events page, review the preview, and confirm the import, then verify the resulting golf day(s)/leaderboard look correct. Do not merge to `main`.
+
+### 2026-08-16 16:00 — Correct Excel Import Against the Actual Birdie Workbook
+
+**Changed by:** Claude, executing `project-os/10-prompts/claude-fix-excel-import-actual-workbook.md` in response to a fresh independent review on PR #1
+
+**Files changed:**
+- supabase/migrations/20260816120000_legacy_workbook_import.sql (rewritten — migration was not yet applied live, so it was safe to amend rather than layer a repair migration)
+- js/legacy-import-utils.js (rewritten)
+- js/birdie-mvp.js
+- scripts/test-legacy-import.js (rewritten)
+- project-os/00-start-here/current-status.md
+- project-os/00-start-here/next-action.md
+- project-os/04-technical/data-model.md
+
+**Summary:**
+A fresh independent review inspected the actual `Monthly Medal APRIL@2026-3.xlsx` directly and found three HIGH-severity mismatches between the first Gate 2B pass and the real workbook, plus real-browser testing surfaced a rollout regression. All four are fixed:
+1. `Player details` is the real **horizontal** layout (a `Member Name` row + an `HC` row, names/handicaps running across columns) — `parsePlayerDetailsRows()` rewritten to match; it previously assumed rows-under-a-header and would not have reconstructed the real roster at all.
+2. `Games` data-row game numbers are text labels (`Game 15`), not numbers — `Number('Game 15')` is `NaN`. `parseGameNumberLabel()` now extracts the integer with a strict `Game N` pattern. Score columns are now mapped from the `Games` sheet's own header row (`GAME #`/`VENUE`/`DATE`/`PLAYER` then one column per player from `E`), never from `Player details` order — `parseGamesRows()` no longer takes a roster-order parameter at all.
+3. Historical-game identity is no longer exact-key equality. The seeded Game 15 has `event_date = null`; a later workbook supplying that date would previously have computed a different key and risked creating a duplicate Game 15. Added `private.match_historical_golf_day()` (mirrored client-side by `matchHistoricalGame()`), which matches on `game_number` + normalized venue with a conservative date-aware fallback: an exact-date match wins; exactly one null-date candidate with no conflicting dated candidate is enriched; anything else ambiguous is a conflict, surfaced and skipped, never guessed. `legacy_import_key` is kept only as an audit fingerprint. The old single-key unique index was replaced with a defensive `(game_number, normalized venue, coalesce(event_date, 'infinity'::date))` index scoped to `excel_import` rows.
+4. Real-browser testing found `loadGolfDays()` (the ordinary Member Golf Hub loader, used by every signed-in user) selected `legacy_import_key` unconditionally, so PostgREST returned HTTP 400 and the whole hub broke on a live project that didn't yet have the migration applied. `loadGolfDays()` no longer selects it at all — the new matching design doesn't need it client-side. The admin-only import panel now separately probes (`checkImportBackendAvailable()`) for the `workbook_imports` table before rendering an active form, showing a clear non-fatal "Import backend not installed yet" message otherwise; the rest of the hub is completely unaffected either way.
+
+Also updated: dates now accept a real Excel date OR strict ISO `YYYY-MM-DD` text (the real workbook has at least one text-style date); anything else stays null/TBC rather than guessed. Since the migration had never been applied to the live Supabase project, it was safe to rewrite the file in place rather than layer a live-repair migration on top — it remains unapplied pending review.
+
+**Tests run:**
+- `node scripts/test-legacy-import.js`: 24/24 passing (up from 15) — fixtures rewritten to mirror the real horizontal `Player details` layout and labelled `Games` layout, including: `Game N` label parsing, strict-ISO-vs-ambiguous date handling, Games-header-driven score mapping, the Game-15 null-date-enrichment scenario, conflicting/ambiguous-candidate rejection, and a static source check that `loadGolfDays()`'s own `.select(...)` call never mentions `legacy_import_key`.
+- `node --check` on all shipped JS files: pass.
+- Secret scan (`service_role`/`sb_secret_`): no matches.
+- `npm run build`: pass.
+- Local dev-server smoke test: pass.
+- GitHub Actions `Birdie MVP Check`: green on both the branch push and PR #1.
+
+**Result:**
+Pass for everything achievable without a live Supabase project or the real club workbook in this environment. The corrected matching/admin-gate/atomicity guarantees are implemented and reviewable in the migration SQL but were not execute-tested against a live database — no Supabase CLI/credentials are available here, and the migration is intentionally still unapplied.
+
+**Risks remaining:**
+- The migration has not been applied to the live Supabase project; a human should review it (especially `private.match_historical_golf_day()` and the new unique index) before applying.
+- The real current club workbook was still not available in this environment; parsing was validated against fixtures that mirror its documented real layout, not the live file itself.
+- Same pre-existing human-only blockers as prior entries: real-browser sign-in, phone-device check, second-account Realtime proof, Vercel preview link.
+
+**Next action:**
+- A human should review and apply the corrected migration to the live Supabase project, re-run Supabase Security Advisor, then upload the actual latest workbook as Admin to acceptance-test the preview/commit. Do not merge to `main`.

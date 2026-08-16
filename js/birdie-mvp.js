@@ -15,7 +15,8 @@
         realtimeChannel: null,
         calendarCursor: null,
         refreshTimer: null,
-        pendingImport: null
+        pendingImport: null,
+        importBackendStatus: 'unknown'
     };
 
     function isElement(target) {
@@ -81,7 +82,11 @@
         const client = await BirdieAuth.ensureClient();
         const result = await client
             .from('golf_days')
-            .select('id, game_number, title, venue, event_date, status, hole_count, is_public, source_type, source_reference, legacy_import_key, created_at')
+            // Deliberately excludes legacy_import_key: this is the ordinary
+            // hub load and must keep working even if the optional Gate 2B
+            // import migration has not been applied yet. Only the Excel
+            // import feature itself (admin-only) probes for those objects.
+            .select('id, game_number, title, venue, event_date, status, hole_count, is_public, source_type, source_reference, created_at')
             .order('event_date', { ascending: false, nullsFirst: false })
             .order('created_at', { ascending: false });
         if (result.error) throw result.error;
@@ -99,6 +104,26 @@
         if (result.error) throw result.error;
         state.members = result.data || [];
         return state.members;
+    }
+
+    // Probes whether the optional Gate 2B import objects (workbook_imports
+    // table + import_legacy_workbook RPC, added together in the same
+    // migration) exist yet, without ever throwing. Never blocks or breaks
+    // the ordinary Golf Hub — only decides what the admin-only import panel
+    // shows. Non-admins never even attempt this.
+    async function checkImportBackendAvailable() {
+        const profile = BirdieAuth.getProfile();
+        if (!profile || profile.role !== 'admin') {
+            state.importBackendStatus = 'unavailable';
+            return;
+        }
+        try {
+            const client = await BirdieAuth.ensureClient();
+            const result = await client.from('workbook_imports').select('id').limit(1);
+            state.importBackendStatus = result.error ? 'unavailable' : 'available';
+        } catch (error) {
+            state.importBackendStatus = 'unavailable';
+        }
     }
 
     function renderLoggedOutHub() {
@@ -228,7 +253,7 @@
 
         mount.innerHTML = '<div class="mvp-loading">Loading member golf hub...</div>';
         try {
-            await Promise.all([loadGolfDays(), loadMembers()]);
+            await Promise.all([loadGolfDays(), loadMembers(), checkImportBackendAvailable()]);
             const userEmail = BirdieAuth.getSession().user && BirdieAuth.getSession().user.email ? BirdieAuth.getSession().user.email : '';
             const role = BirdieAuth.getProfile() && BirdieAuth.getProfile().role ? BirdieAuth.getProfile().role : 'member';
 
@@ -660,11 +685,13 @@
         const playerRows = XLSX.utils.sheet_to_json(workbook.Sheets[playerSheetName], { header: 1, raw: false, defval: '' });
         const members = BirdieLegacyImport.parsePlayerDetailsRows(playerRows);
         if (!members.length) {
-            throw new Error('No roster rows were found under "Member Name" on the Player details sheet.');
+            throw new Error('No roster row was found next to "Member Name" on the Player details sheet.');
         }
 
+        // The Games header row is the authority for which column holds
+        // which player's score — it is never derived from Player details.
         const gameRows = XLSX.utils.sheet_to_json(workbook.Sheets[gamesSheetName], { header: 1, defval: null });
-        const games = BirdieLegacyImport.parseGamesRows(gameRows, members.map(function (m) { return m.full_name; }));
+        const games = BirdieLegacyImport.parseGamesRows(gameRows);
 
         return { filename: file.name, checksum: checksum, members: members, games: games };
     }
@@ -781,6 +808,21 @@
     function renderImportPanel() {
         const profile = BirdieAuth.getProfile();
         if (!profile || profile.role !== 'admin') return '';
+
+        if (state.importBackendStatus !== 'available') {
+            return `
+                <section class="mvp-panel mvp-import-panel">
+                    <div class="mvp-panel-heading">
+                        <div>
+                            <p class="mvp-eyebrow">Admin only</p>
+                            <h3>Import Latest Club Workbook</h3>
+                        </div>
+                    </div>
+                    <p class="mvp-small-note">Import backend not installed yet. Ask your developer to apply the latest database migration before this feature is available. The rest of the Golf Hub is unaffected.</p>
+                </section>
+            `;
+        }
+
         return `
             <section class="mvp-panel mvp-import-panel">
                 <div class="mvp-panel-heading">

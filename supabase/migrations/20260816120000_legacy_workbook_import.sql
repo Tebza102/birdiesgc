@@ -1,7 +1,16 @@
 -- Birdie Squad MVP: admin-only legacy Excel workbook import.
--- Adds a deterministic legacy-game fingerprint, an import audit table, and a
+-- Adds a deterministic legacy-game matcher, an import audit table, and a
 -- single atomic RPC entry point that performs the whole import server-side.
 -- The RPC re-validates admin/approval itself; it never trusts the browser.
+--
+-- Corrected against direct inspection of the real workbook: a historical
+-- game's identity cannot rely on exact-key equality alone, because the
+-- seeded Game 15 currently has a null event_date and a later workbook may
+-- supply it. Matching is game_number + normalized venue, with a
+-- conservative date-aware fallback that enriches a null date instead of
+-- ever splitting one game into two rows. See
+-- private.match_historical_golf_day() below, which js/legacy-import-utils.js
+-- (matchHistoricalGame) mirrors for the browser preview.
 
 create or replace function private.normalize_text(p_value text)
 returns text
@@ -12,9 +21,9 @@ as $$
   select nullif(lower(regexp_replace(trim(coalesce(p_value, '')), '\s+', ' ', 'g')), '');
 $$;
 
--- Deterministic legacy-game fingerprint: game number + normalized venue,
--- plus the event date when one is known. This is recomputed server-side on
--- every import call rather than trusted from the client payload.
+-- Kept as an audit/traceability fingerprint only — NOT the sole identity
+-- rule for matching. See private.match_historical_golf_day() for the real
+-- matching logic, which safely tolerates a missing date on either side.
 create or replace function private.legacy_game_key(p_game_number integer, p_venue text, p_event_date date)
 returns text
 language sql
@@ -30,17 +39,127 @@ as $$
   end;
 $$;
 
+-- Deterministic, conservative historical-game matcher.
+--
+-- Candidate set: source_type = 'excel_import', same game_number, same
+-- normalized venue. A missing date on either side must never split one
+-- real historical game into two rows, but a genuine date conflict — or any
+-- remaining ambiguity — is surfaced as a conflict rather than guessed:
+--   0 candidates                                                  -> new
+--   incoming has a date:
+--     exactly one candidate with that exact date                  -> matched
+--     more than one candidate with that exact date                -> conflict
+--     no exact match, exactly one null-date candidate and no other
+--       (differently) dated candidate                             -> matched (enrich)
+--     anything else                                                -> conflict
+--   incoming has no date:
+--     exactly one candidate total                                  -> matched
+--     more than one candidate                                      -> conflict
+create or replace function private.match_historical_golf_day(
+  p_game_number integer,
+  p_venue text,
+  p_event_date date
+)
+returns table(matched_id uuid, status text)
+language plpgsql
+stable
+set search_path = ''
+as $$
+declare
+  v_norm_venue text := private.normalize_text(p_venue);
+  v_total_candidates integer;
+  v_exact_count integer;
+  v_exact_id uuid;
+  v_null_count integer;
+  v_null_id uuid;
+  v_dated_other_count integer;
+begin
+  if p_game_number is null then
+    return query select null::uuid, 'conflict'::text;
+    return;
+  end if;
+
+  select count(*) into v_total_candidates
+  from public.golf_days
+  where source_type = 'excel_import'
+    and game_number = p_game_number
+    and private.normalize_text(venue) is not distinct from v_norm_venue;
+
+  if v_total_candidates = 0 then
+    return query select null::uuid, 'new'::text;
+    return;
+  end if;
+
+  if p_event_date is not null then
+    select count(*), max(id) into v_exact_count, v_exact_id
+    from public.golf_days
+    where source_type = 'excel_import'
+      and game_number = p_game_number
+      and private.normalize_text(venue) is not distinct from v_norm_venue
+      and event_date = p_event_date;
+
+    if v_exact_count = 1 then
+      return query select v_exact_id, 'matched'::text;
+      return;
+    elsif v_exact_count > 1 then
+      return query select null::uuid, 'conflict'::text;
+      return;
+    end if;
+
+    select count(*), max(id) into v_null_count, v_null_id
+    from public.golf_days
+    where source_type = 'excel_import'
+      and game_number = p_game_number
+      and private.normalize_text(venue) is not distinct from v_norm_venue
+      and event_date is null;
+
+    select count(*) into v_dated_other_count
+    from public.golf_days
+    where source_type = 'excel_import'
+      and game_number = p_game_number
+      and private.normalize_text(venue) is not distinct from v_norm_venue
+      and event_date is not null;
+
+    if v_null_count = 1 and v_dated_other_count = 0 then
+      return query select v_null_id, 'matched'::text;
+      return;
+    end if;
+
+    return query select null::uuid, 'conflict'::text;
+    return;
+  end if;
+
+  -- Incoming row has no date at all.
+  if v_total_candidates = 1 then
+    select id into v_exact_id
+    from public.golf_days
+    where source_type = 'excel_import'
+      and game_number = p_game_number
+      and private.normalize_text(venue) is not distinct from v_norm_venue
+    limit 1;
+    return query select v_exact_id, 'matched'::text;
+    return;
+  end if;
+
+  return query select null::uuid, 'conflict'::text;
+end;
+$$;
+
 alter table public.golf_days add column legacy_import_key text;
 
--- Only one excel_import golf day may ever claim a given legacy key. This is
--- the structural guarantee that makes "matched vs new" a deterministic
--- 0-or-1 lookup rather than something the import logic has to guess about.
-create unique index golf_days_legacy_import_key_unique
-on public.golf_days (legacy_import_key)
-where legacy_import_key is not null;
+-- Defensive backstop, not the primary de-dup mechanism (that is
+-- private.match_historical_golf_day(), used by the RPC before every
+-- insert/update). Collapses a null event_date to a sentinel so two
+-- null-date rows for the same game_number+venue collide, while still
+-- allowing a null-date row and a later differently-dated row to coexist
+-- momentarily — the RPC's own matching logic is what actually finds and
+-- enriches the null-date row instead of creating a second one.
+create unique index golf_days_excel_import_identity_unique
+on public.golf_days (game_number, (private.normalize_text(venue)), (coalesce(event_date, 'infinity'::date)))
+where source_type = 'excel_import';
 
--- Backfill the seeded Game 15 so a later workbook containing Game 15 matches
--- the existing record instead of creating a duplicate historical round.
+-- Backfill the seeded Game 15 (and any other excel_import row) with a
+-- fingerprint for traceability only.
 update public.golf_days
 set legacy_import_key = private.legacy_game_key(game_number, venue, event_date)
 where source_type = 'excel_import'
@@ -105,8 +224,12 @@ declare
   v_games_skipped integer := 0;
   v_players_written integer := 0;
   v_players_skipped integer := 0;
+  v_game_number integer;
+  v_venue text;
+  v_event_date date;
   v_game_key text;
   v_day_id uuid;
+  v_match_status text;
   v_day_source_type text;
   v_import_id uuid;
   v_summary jsonb;
@@ -174,60 +297,58 @@ begin
     end if;
   end loop;
 
-  -- Historical games, matched/created only via the deterministic legacy key.
+  -- Historical games: matched/created via private.match_historical_golf_day(),
+  -- which safely tolerates a missing date on either side rather than
+  -- treating a date becoming known later as a different game.
   for v_game in select * from jsonb_array_elements(coalesce(payload->'games', '[]'::jsonb))
   loop
-    v_game_key := private.legacy_game_key(
-      nullif(v_game->>'game_number', '')::integer,
-      v_game->>'venue',
-      nullif(v_game->>'event_date', '')::date
-    );
+    v_game_number := nullif(v_game->>'game_number', '')::integer;
+    v_venue := nullif(trim(v_game->>'venue'), '');
+    v_event_date := nullif(v_game->>'event_date', '')::date;
 
-    if v_game_key is null then
+    select matched_id, status into v_day_id, v_match_status
+    from private.match_historical_golf_day(v_game_number, v_venue, v_event_date);
+
+    if v_match_status = 'conflict' then
       v_games_skipped := v_games_skipped + 1;
       continue;
     end if;
 
-    v_day_id := null;
-    v_day_source_type := null;
-
-    select id, source_type into v_day_id, v_day_source_type
-    from public.golf_days
-    where legacy_import_key = v_game_key;
-
-    if v_day_id is not null and v_day_source_type <> 'excel_import' then
-      -- Never overwrite, convert or downgrade an app-created/live golf day.
-      v_games_skipped := v_games_skipped + 1;
-      continue;
+    if v_day_id is not null then
+      select source_type into v_day_source_type from public.golf_days where id = v_day_id;
+      if v_day_source_type is distinct from 'excel_import' then
+        -- Structural guard: the matcher only ever searches
+        -- source_type = 'excel_import' rows, so this should be
+        -- unreachable, but an app-created/live round is never trusted
+        -- with an import write regardless.
+        v_games_skipped := v_games_skipped + 1;
+        continue;
+      end if;
     end if;
+
+    v_game_key := private.legacy_game_key(v_game_number, v_venue, v_event_date);
 
     if v_day_id is null then
       insert into public.golf_days (
         game_number, title, venue, event_date, status, scoring_method, hole_count,
         is_public, source_type, source_reference, legacy_import_key
       ) values (
-        nullif(v_game->>'game_number', '')::integer,
-        'Monthly Medal - Game ' || (v_game->>'game_number'),
-        nullif(trim(v_game->>'venue'), ''),
-        nullif(v_game->>'event_date', '')::date,
+        v_game_number,
+        'Monthly Medal - Game ' || v_game_number::text,
+        v_venue,
+        v_event_date,
         'closed', 'gross_stroke_v1', 18, false, 'excel_import', v_filename, v_game_key
       )
       returning id into v_day_id;
       v_games_created := v_games_created + 1;
     else
       update public.golf_days
-      set venue = coalesce(nullif(trim(v_game->>'venue'), ''), venue),
-          event_date = coalesce(nullif(v_game->>'event_date', '')::date, event_date),
-          source_reference = v_filename
+      set venue = coalesce(v_venue, venue),
+          event_date = coalesce(v_event_date, event_date),
+          source_reference = v_filename,
+          legacy_import_key = coalesce(v_game_key, legacy_import_key)
       where id = v_day_id;
       v_games_updated := v_games_updated + 1;
-    end if;
-
-    -- Defensive re-check: this code path must only ever write into an
-    -- excel_import round, even if an earlier step in this function changes.
-    select source_type into v_day_source_type from public.golf_days where id = v_day_id;
-    if v_day_source_type is distinct from 'excel_import' then
-      raise exception 'Refusing to write imported scores into a non-imported golf day.' using errcode = '42501';
     end if;
 
     for v_player in select * from jsonb_array_elements(coalesce(v_game->'players', '[]'::jsonb))
