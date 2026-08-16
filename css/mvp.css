@@ -321,6 +321,7 @@
 }
 
 .mvp-form-grid input,
+.mvp-form-grid textarea,
 .mvp-inline-form select {
     width: 100%;
     min-height: 42px;
@@ -332,8 +333,88 @@
     font: inherit;
 }
 
+.mvp-form-grid textarea {
+    min-height: 84px;
+    resize: vertical;
+}
+
+.mvp-form-grid input[type="file"] {
+    min-height: auto;
+    padding: 0.4rem 0;
+    border: none;
+    background: transparent;
+}
+
 .mvp-span-2 {
     grid-column: span 2;
+}
+
+.mvp-promo-details {
+    margin-top: 0;
+}
+
+.mvp-promo-details summary {
+    color: var(--primary-green);
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.mvp-prize-rows {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.mvp-prize-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+}
+
+.mvp-prize-row input {
+    min-height: 38px;
+}
+
+/* Event / promotion presentation shown above the leaderboard/scorer on a
+   golf day's detail view. Contained by .mvp-day-detail's own width — no
+   fixed/oversized dimensions here, per the mobile-responsiveness rules. */
+.mvp-event-presentation {
+    margin-bottom: var(--spacing-md);
+    padding-bottom: var(--spacing-md);
+    border-bottom: 1px solid #e3e9e3;
+}
+
+.mvp-event-poster {
+    display: block;
+    width: 100%;
+    max-height: 260px;
+    object-fit: cover;
+    border-radius: var(--radius-md);
+    margin-bottom: var(--spacing-sm);
+}
+
+.mvp-event-summary {
+    font-weight: 700;
+    color: var(--text-dark);
+}
+
+.mvp-event-meta {
+    display: grid;
+    gap: 0.3rem;
+    margin: 0.75rem 0;
+}
+
+.mvp-event-meta p {
+    margin: 0;
+}
+
+/* Tiny unobtrusive marker on a calendar event button that has a poster or
+   prizes — the calendar cell itself stays compact; title remains the main
+   content. */
+.mvp-calendar-event.has-presentation::after {
+    content: '\2605';
+    margin-left: 0.3rem;
+    font-size: 0.62rem;
+    vertical-align: super;
 }
 
 .mvp-check {
@@ -714,6 +795,15 @@
 
     .mvp-panel-heading {
         margin-bottom: var(--spacing-sm);
+    }
+
+    .mvp-prize-row {
+        grid-template-columns: 1fr;
+        gap: 0.3rem;
+    }
+
+    .mvp-event-poster {
+        max-height: 180px;
     }
 
     .mvp-leaderboard,

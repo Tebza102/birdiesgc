@@ -37,6 +37,7 @@ Do not use `user_metadata` for roles or approval decisions.
 - Score writes additionally require role `scorer`, `management`, or `admin`.
 - Golf-day create/status administration requires role `management` or `admin`.
 - Legacy workbook import (`Import Latest Club Workbook`) requires role `admin` specifically — management/scorer/member accounts never see the control, and the `import_legacy_workbook()` RPC independently re-checks `role = 'admin'` and `approved = true` against `user_profiles` before writing anything, regardless of what the browser sends.
+- Golf-day event/promotion details (description, times, prizes, poster) require role `management` or `admin`, same as golf-day create/status administration — scorer/member accounts never see the edit UI. Poster upload/replace/delete additionally requires the same role check enforced independently by Storage RLS policies on the `event-posters` bucket, not just the browser hiding the form.
 - UI visibility is convenience only; RLS is authoritative.
 
 ## Public Routes

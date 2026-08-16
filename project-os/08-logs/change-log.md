@@ -317,3 +317,46 @@ Pass for everything achievable without a browser in this environment. **No brows
 
 **Next action:**
 - A human should open the Events page on a real phone (or browser devtools at 320/360/375/390/430px) and confirm: no page-level horizontal scroll, the leaderboard and scorer are usable, at least two (ideally more) hole cells are visible beside the player identity while scoring, the mobile header no longer covers content while scrolling, and the individual scorecard/import/calendar controls fit. Do not merge to `main`.
+
+### 2026-08-16 21:00 — Rich Event Details + Poster Upload (Gate 2D)
+
+**Changed by:** Claude, executing `project-os/10-prompts/claude-event-details-poster-media.md`
+
+**Files changed:**
+- supabase/migrations/20260816130000_event_details_and_poster.sql (new)
+- js/birdie-mvp.js
+- js/birdie-public-events.js (rewritten)
+- js/main.js
+- css/mvp.css
+- css/style.css
+- index.html
+- scripts/test-event-details.js (new)
+- .github/workflows/mvp-check.yml
+- project-os/00-start-here/current-status.md
+- project-os/00-start-here/next-action.md
+- project-os/04-technical/data-model.md
+- project-os/04-technical/auth-and-roles.md
+
+**Summary:**
+Restored the richer promotional event presentation the old static `events-data.js` site had (description, reporting/tee-off time, green fee, sponsor, prizes, poster, featured treatment) as database-backed `golf_days` columns, rather than hard-coded. New migration adds nullable `short_description`, `description`, `reporting_time`, `tee_off_time`, `green_fee`, `event_note`, `sponsor_name`, `prizes` (jsonb array), `poster_path`, `poster_alt`, `featured` — no scoring columns touched, no new `golf_days` RLS policy needed (the existing admin/management write policies already cover the new columns). Added a public-read/admin-write `event-posters` Storage bucket (JPG/PNG/WebP, 5MB, enforced by the bucket configuration itself) with RLS policies gated on `user_profiles.role in ('admin','management') and approved = true`. The existing fast golf-day creation flow is unchanged (still just title/date/venue) with an optional collapsed "Event / promotion details" section added to the same form; a separate "Edit event / promotion details" section was added to the day-detail view for already-created `app` golf days (never for historical `closed + excel_import` rounds, which keep their existing read-only gate). `js/birdie-public-events.js` was rewritten to render a database-backed Featured Event card (`featured = true` wins, else nearest upcoming public event) and an enhanced calendar list — both null-safe (no bare labels for absent fields, no prize section for an empty array, no placeholder photo when no poster exists) — with automatic fallback to base columns, then to the static page, if the rich query or Supabase itself is unavailable. The same query now also drives a live homepage "next event" countdown, replacing a static countdown feature that was previously dead code (defined in `js/main.js` but never called); `window.BirdieEventUtils` was exposed from `js/main.js` so the countdown timer/markup logic is shared rather than duplicated. The Member Golf Hub calendar stays compact — a tiny `::after` star badge (no extra DOM) marks a day with a poster/prizes; the day detail shows the full presentation block above the leaderboard/scorer only when a field is actually set. Applied the Gate 2B migration-compatibility lesson throughout: `loadGolfDays()` (the ordinary hub loader) still never selects any new column; presentation flags/detail are fetched via separate, independently try/caught queries; `createGolfDay()` retries with a base-only payload if the promo-field insert fails, so day creation itself can never be blocked by this migration being absent. Documented a future `club_posts`-style content model direction (separate private bucket for member/sponsor-only material) in `data-model.md` without building it.
+
+**Tests run:**
+- `node scripts/test-event-details.js` (new): 14/14 passing — migration-compatibility discipline (base loader excludes new columns, presentation loaders/creation fallback never throw), empty-field/empty-prize-array guards, poster-omitted-when-absent behaviour, client/server poster type+size limit consistency, RLS write-gating present in the migration text, golf_days RLS untouched, edit-form read-only/role gates, day-detail still includes leaderboard/scorer, calendar badge doesn't touch cell sizing, poster/prize-row mobile width-safety.
+- `node scripts/test-legacy-import.js`: 24/24 passing (unaffected).
+- `node scripts/test-mobile-css.js`: 15/15 passing (unaffected).
+- `node --check` on all shipped JS files: pass.
+- Secret scan (`service_role`/`sb_secret_`): no matches.
+- `npm run build`: pass.
+- Local dev-server smoke test, now also checking `/` (homepage) includes the public-events script: pass.
+- GitHub Actions `Birdie MVP Check`: green on both the branch push and PR #1.
+
+**Result:**
+Pass for everything achievable without a live Supabase project or a browser in this environment. The migration, Storage bucket/policies, and rendering are implemented and reviewable but not execute-tested — no Supabase CLI/credentials or browser automation are available here. The migration is intentionally not applied to the live project.
+
+**Risks remaining:**
+- No real Supabase project or browser to confirm the migration applies cleanly, the Storage bucket/policies behave as written, or the public/homepage/day-detail rendering actually looks right.
+- The real poster image workflow (upload → public URL → display) has not been exercised end-to-end.
+- Same pre-existing human-only blockers as prior entries: real-browser sign-in, mobile-device check, second-account Realtime proof, Vercel preview link, Gate 2B migration review/apply + real-workbook acceptance.
+
+**Next action:**
+- A human should review and apply the Gate 2D migration to the live Supabase project (after or alongside the still-pending Gate 2B migration review), re-run Supabase Security Advisor, then as Admin add event details and upload a real poster to a golf day, confirm the public Events page/homepage/calendar render correctly, and confirm a member/scorer account cannot access the edit UI or the Storage bucket. Do not merge to `main`.

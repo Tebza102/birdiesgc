@@ -1,13 +1,14 @@
 # Next Action
 
 ## Current Objective
-Complete real-browser/device validation of the live scorer, the mobile layout fix, and the new Excel workbook import using the private acceptance-test golf day and the club's actual latest workbook.
+Complete real-browser/device validation of the live scorer, the mobile layout fix, the Excel workbook import, and the new event-details/poster feature, using the private acceptance-test golf day and real club data (workbook + a real poster image).
 
 ## Gate Status
 - Gate 1 — Backend/database/RLS/spreadsheet validation: **COMPLETE**.
 - Gate 2 — Auth/calendar/scorer/digital scorecard/live leaderboard: **ENGINEERING COMPLETE; REAL-BROWSER/DEVICE VALIDATION IN PROGRESS**.
 - Gate 2B — Admin Excel workbook upload/import for legacy continuity and backup: **CORRECTED AGAINST THE REAL WORKBOOK (preview, safe null-date-tolerant matching, atomic admin-gated RPC, audit trail, 24 passing unit tests, ordinary hub no longer depends on the migration); MIGRATION NOT YET APPLIED LIVE, THEN NEEDS REAL-WORKBOOK ACCEPTANCE**.
 - Gate 2C — Mobile responsiveness of the Events / Member Golf Hub: **FIXED (CSS-only + a small player-cell total echo); VERIFIED BY STATIC REGRESSION CHECKS AND ARITHMETIC ONLY — NEEDS A REAL PHONE**.
+- Gate 2D — Rich event details + poster upload: **ENGINEERING COMPLETE (schema, public-read/admin-write Storage bucket, create/edit UI, database-backed Featured Event + homepage countdown, 14 passing static regression tests, ordinary hub no longer depends on the migration); MIGRATION NOT YET APPLIED LIVE, THEN NEEDS REAL-POSTER/REAL-BROWSER ACCEPTANCE**.
 - Gate 3 — Private chairman/member preview: **NOT STARTED** (needs a Vercel project link).
 
 ## Private Acceptance-Test Golf Day
@@ -54,6 +55,21 @@ Required behavior:
 
 Do not expand this into generic spreadsheet ETL, reporting, handicap automation, or Order of Merit automation in this phase.
 
+## Rich Event Details + Poster Upload — ENGINEERING COMPLETE, NOT YET APPLIED LIVE
+An approved admin/management user can now enter promotional event details (short/full description, reporting/tee-off time, green fee, sponsor, note, up to 4 prizes, poster image + alt text, featured toggle) when creating a golf day, or edit them later from an already-created app golf day's detail view. Historical `closed + excel_import` rounds never show this edit path. The public Events page renders a database-backed Featured Event card and an enhanced calendar list from the same data, with a static fallback if Supabase/the migration is unavailable; the homepage gets a live "next event" countdown from the same query (previously dead static code, never duplicated data). Implementation detail: `project-os/04-technical/data-model.md` → "Event Details + Poster Upload"; migration `supabase/migrations/20260816130000_event_details_and_poster.sql` (**intentionally not yet applied to the live Supabase project**, including the new `event-posters` Storage bucket + policies). What remains: review and apply the migration, then a human should add real event details/upload a real poster as Admin, confirm a member/scorer account cannot access the edit UI or the Storage bucket, and confirm the public/homepage rendering looks right — this was built and unit-tested (14 passing checks) via static/source analysis only, since no live Supabase project or browser is available in this environment.
+
+Purpose:
+- Bring back the promotional presentation the old static site had (poster, prizes, sponsor visibility) without hard-coding it again.
+- Let the club show golf days as real promotional events, not just scoring records.
+- Lay a reusable (but not over-built) foundation for future member updates/newsletters/sponsor reports — intentionally not built in this pass; see `project-os/04-technical/data-model.md` for the documented future direction.
+
+Required behavior:
+- Promotional fields are entirely optional; a golf day with none of them continues to work exactly as before.
+- Poster upload restricted to approved admin/management via Storage RLS; JPG/PNG/WebP only, 5MB limit enforced by the bucket itself.
+- Public visitors can read posters/prizes only for `is_public = true` events already eligible under existing RLS.
+- Never show an empty `Sponsor:`/`Green Fee:` label or an empty prize section when the field is absent.
+- Never fall back to an unrelated placeholder photo when no poster was uploaded — omit the image instead.
+
 ## User Input Policy
 Do not ask the user to create tables, copy SQL, understand Supabase internals, or manage roles manually. Ask only for the smallest information that cannot safely be inferred or generated.
 
@@ -84,6 +100,9 @@ Do not ask the user to create tables, copy SQL, understand Supabase internals, o
 - Management/scorer permissions.
 - Upload/import the club's latest `.xlsx` legacy workbook (implemented; not available to management/scorer/member accounts).
 
+### Approved admin/management
+- Enter or edit a golf day's promotional event details and upload/replace its poster (implemented; not available to scorer/member accounts, and never available for historical `closed + excel_import` rounds).
+
 ## Acceptance Tests Already Passed
 - 83 spreadsheet roster members imported.
 - Game 15 / STATEMINES GC imported with 22 players.
@@ -102,7 +121,7 @@ The scorer screen must remain a simplified continuation of the spreadsheet: play
 - Do not automate handicap/differential logic.
 - Do not build Order of Merit, Admin Points, GPS, statistics, social, team/tournament, payment, sponsor-dashboard, or CRM features.
 - Do not expose Supabase secret/service-role credentials.
-- Do not merge to `main` or production before live-scorer/two-user preview validation and the required Excel upload/import feature are complete.
+- Do not merge to `main` or production before live-scorer/two-user preview validation and the required Excel upload/import and event-details/poster features are complete.
 
 ## Definition of Done for This MVP Phase
 This phase is complete only when:
@@ -113,3 +132,4 @@ This phase is complete only when:
 5. An approved admin can upload the latest validated club `.xlsx` workbook, preview the changes, and safely import new/updated historical results without duplicate legacy games or fabricated hole scores.
 6. The existing public Events page still works.
 7. A private preview is ready for chairman/member testing.
+8. An approved admin/management user can add/edit a golf day's promotional details and poster; the public Events page and homepage render them correctly with a safe fallback; a member/scorer account cannot edit event details or write to the poster Storage bucket.

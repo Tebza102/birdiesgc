@@ -16,8 +16,14 @@
         calendarCursor: null,
         refreshTimer: null,
         pendingImport: null,
-        importBackendStatus: 'unknown'
+        importBackendStatus: 'unknown',
+        presentationFlags: {},
+        currentPresentation: null
     };
+
+    const POSTER_BUCKET = 'event-posters';
+    const POSTER_MAX_BYTES = 5 * 1024 * 1024;
+    const POSTER_ALLOWED_TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
 
     function isElement(target) {
         return target && target.nodeType === 1;
@@ -126,6 +132,30 @@
         }
     }
 
+    // Lightweight per-day flags (has a poster / has prizes) for the tiny
+    // calendar badge, fetched separately from loadGolfDays() so the base
+    // hub load never depends on the event-details migration existing.
+    // Never throws — a missing migration just means no badges, not a
+    // broken calendar.
+    async function loadPresentationFlags() {
+        try {
+            const client = await BirdieAuth.ensureClient();
+            const result = await client.from('golf_days').select('id, poster_path, prizes');
+            if (result.error) throw result.error;
+            const flags = {};
+            (result.data || []).forEach(function (row) {
+                flags[row.id] = {
+                    hasPoster: !!row.poster_path,
+                    hasPrizes: Array.isArray(row.prizes) && row.prizes.length > 0
+                };
+            });
+            state.presentationFlags = flags;
+        } catch (error) {
+            console.error('Birdie MVP presentation flags unavailable (migration may not be applied yet):', error);
+            state.presentationFlags = {};
+        }
+    }
+
     function renderLoggedOutHub() {
         const mount = getMount();
         if (!mount) return;
@@ -190,7 +220,9 @@
                 <div class="mvp-calendar-cell ${events.length ? 'has-event' : ''}">
                     <span class="mvp-calendar-number">${dayNumber}</span>
                     ${events.map(function (day) {
-                        return `<button type="button" class="mvp-calendar-event" data-open-day="${day.id}" title="${escapeHtml(day.title)}">${escapeHtml(day.title)}</button>`;
+                        const flags = state.presentationFlags[day.id];
+                        const badgeClass = flags && (flags.hasPoster || flags.hasPrizes) ? ' has-presentation' : '';
+                        return `<button type="button" class="mvp-calendar-event${badgeClass}" data-open-day="${day.id}" title="${escapeHtml(day.title)}">${escapeHtml(day.title)}</button>`;
                     }).join('')}
                 </div>
             `);
@@ -221,6 +253,92 @@
         }).join('')}</div>`;
     }
 
+    // Shared by the create form and the edit-event-details form so the
+    // markup/field set never drifts between the two. `info` is null/empty
+    // for a brand-new golf day.
+    function renderPromoFieldsGrid(info) {
+        info = info || {};
+        const prizes = Array.isArray(info.prizes) ? info.prizes : [];
+        const prizeRows = Array.from({ length: 4 }, function (_, index) {
+            const prize = prizes[index] || {};
+            return `
+                <div class="mvp-prize-row">
+                    <input type="text" name="prize_label_${index}" placeholder="1st Prize" value="${escapeHtml(prize.label || '')}">
+                    <input type="text" name="prize_value_${index}" placeholder="R1500" value="${escapeHtml(prize.value || '')}">
+                </div>
+            `;
+        }).join('');
+
+        return `
+            <label class="mvp-check"><input type="checkbox" name="featured" ${info.featured ? 'checked' : ''}> Feature this event on the public Events page</label>
+            <label class="mvp-span-2">Short description<input type="text" name="short_description" maxlength="180" value="${escapeHtml(info.short_description || '')}" placeholder="One-line summary for the calendar/card"></label>
+            <label class="mvp-span-2">Full description<textarea name="description" rows="3" placeholder="Longer description shown on the featured event">${escapeHtml(info.description || '')}</textarea></label>
+            <label>Reporting time<input type="time" name="reporting_time" value="${escapeHtml(info.reporting_time ? String(info.reporting_time).slice(0, 5) : '')}"></label>
+            <label>Tee-off time<input type="time" name="tee_off_time" value="${escapeHtml(info.tee_off_time ? String(info.tee_off_time).slice(0, 5) : '')}"></label>
+            <label>Green fee<input type="text" name="green_fee" value="${escapeHtml(info.green_fee || '')}" placeholder="R300.00"></label>
+            <label>Sponsor<input type="text" name="sponsor_name" value="${escapeHtml(info.sponsor_name || '')}" placeholder="Sponsor name"></label>
+            <label class="mvp-span-2">Note / instructions<input type="text" name="event_note" value="${escapeHtml(info.event_note || '')}" placeholder="Wear club colours, etc."></label>
+            <label class="mvp-span-2">Poster image (JPG, PNG or WebP, up to 5MB)<input type="file" name="poster_file" accept="image/jpeg,image/png,image/webp"></label>
+            <label class="mvp-span-2">Poster alt text<input type="text" name="poster_alt" value="${escapeHtml(info.poster_alt || '')}" placeholder="Describe the poster for screen readers"></label>
+            <div class="mvp-span-2 mvp-prize-rows">
+                <p class="mvp-small-note">Prizes (optional — leave a row blank to skip it)</p>
+                ${prizeRows}
+            </div>
+        `;
+    }
+
+    function readPromoFieldsFromForm(form) {
+        const data = new FormData(form);
+        const prizes = [];
+        for (let i = 0; i < 4; i += 1) {
+            const label = String(data.get('prize_label_' + i) || '').trim();
+            const value = String(data.get('prize_value_' + i) || '').trim();
+            if (label || value) prizes.push({ label: label, value: value });
+        }
+        return {
+            featured: data.get('featured') === 'on',
+            short_description: String(data.get('short_description') || '').trim() || null,
+            description: String(data.get('description') || '').trim() || null,
+            reporting_time: String(data.get('reporting_time') || '').trim() || null,
+            tee_off_time: String(data.get('tee_off_time') || '').trim() || null,
+            green_fee: String(data.get('green_fee') || '').trim() || null,
+            event_note: String(data.get('event_note') || '').trim() || null,
+            sponsor_name: String(data.get('sponsor_name') || '').trim() || null,
+            prizes: prizes,
+            poster_alt: String(data.get('poster_alt') || '').trim() || null
+        };
+    }
+
+    // Uploads the poster selected in `form` (if any) to a collision-safe
+    // <golf_day_id>/<timestamp>-<random>.<ext> path, removes the previous
+    // poster object once the new one is safely uploaded (best-effort, never
+    // blocks on cleanup failure), and returns the path to store on the
+    // golf_days row. Returns the unchanged previous path if no new file was
+    // chosen. Client-side type/size checks give a fast, friendly error;
+    // the storage bucket itself (event-posters, 5MB, jpeg/png/webp only)
+    // is the real server-side enforcement boundary.
+    async function uploadPosterIfProvided(form, dayId, previousPosterPath) {
+        const fileInput = form.querySelector('[name="poster_file"]');
+        const file = fileInput && fileInput.files ? fileInput.files[0] : null;
+        if (!file) return previousPosterPath || null;
+
+        const ext = POSTER_ALLOWED_TYPES[file.type];
+        if (!ext) throw new Error('Poster must be a JPG, PNG or WebP image.');
+        if (file.size > POSTER_MAX_BYTES) throw new Error('Poster must be smaller than 5MB.');
+
+        const client = await BirdieAuth.ensureClient();
+        const path = dayId + '/' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.' + ext;
+        const uploadResult = await client.storage.from(POSTER_BUCKET).upload(path, file, { contentType: file.type, upsert: false });
+        if (uploadResult.error) throw uploadResult.error;
+
+        if (previousPosterPath) {
+            client.storage.from(POSTER_BUCKET).remove([previousPosterPath]).catch(function (error) {
+                console.error('Birdie MVP could not remove the previous poster (non-fatal):', error);
+            });
+        }
+        return path;
+    }
+
     function renderCreateDayForm() {
         if (!BirdieAuth.getProfile() || !canManageGolfDays(BirdieAuth.getProfile().role)) return '';
         return `
@@ -232,7 +350,11 @@
                     <label class="mvp-span-2">Golf day name<input name="title" type="text" required placeholder="Monthly Medal"></label>
                     <label class="mvp-span-2">Venue<input name="venue" type="text" required placeholder="Nigel GC"></label>
                     <label class="mvp-check"><input name="is_public" type="checkbox" checked> Show on club calendar</label>
-                    <button type="submit" class="btn btn-primary">Create Golf Day</button>
+                    <details class="mvp-promo-details mvp-span-2">
+                        <summary>Event / promotion details (optional)</summary>
+                        <div class="mvp-form-grid">${renderPromoFieldsGrid(null)}</div>
+                    </details>
+                    <button type="submit" class="btn btn-primary mvp-span-2">Create Golf Day</button>
                 </form>
             </details>
         `;
@@ -253,7 +375,7 @@
 
         mount.innerHTML = '<div class="mvp-loading">Loading member golf hub...</div>';
         try {
-            await Promise.all([loadGolfDays(), loadMembers(), checkImportBackendAvailable()]);
+            await Promise.all([loadGolfDays(), loadMembers(), checkImportBackendAvailable(), loadPresentationFlags()]);
             const userEmail = BirdieAuth.getSession().user && BirdieAuth.getSession().user.email ? BirdieAuth.getSession().user.email : '';
             const role = BirdieAuth.getProfile() && BirdieAuth.getProfile().role ? BirdieAuth.getProfile().role : 'member';
 
@@ -288,11 +410,38 @@
         }
     }
 
+    // Separate, independently-guarded from the scoring/leaderboard queries
+    // above: a missing event-details migration must never break opening a
+    // golf day, only mean no presentation block is shown for it.
+    async function loadCurrentDayPresentation(client, dayId) {
+        state.currentPresentation = null;
+        try {
+            const result = await client
+                .from('golf_days')
+                .select('short_description, description, reporting_time, tee_off_time, green_fee, event_note, sponsor_name, prizes, poster_path, poster_alt, featured')
+                .eq('id', dayId)
+                .maybeSingle();
+            if (result.error) throw result.error;
+            const info = result.data;
+            if (!info) return;
+            let posterUrl = '';
+            if (info.poster_path) {
+                const urlResult = client.storage.from(POSTER_BUCKET).getPublicUrl(info.poster_path);
+                posterUrl = urlResult && urlResult.data ? urlResult.data.publicUrl : '';
+            }
+            state.currentPresentation = Object.assign({}, info, { posterUrl: posterUrl });
+        } catch (error) {
+            console.error('Birdie MVP event presentation unavailable (migration may not be applied yet):', error);
+            state.currentPresentation = null;
+        }
+    }
+
     async function loadCurrentDayData(dayId) {
         const client = await BirdieAuth.ensureClient();
         const results = await Promise.all([
             client.from('live_leaderboard').select('*').eq('golf_day_id', dayId).order('position', { ascending: true, nullsFirst: false }).order('player_name'),
-            client.from('golf_day_players').select('id, golf_day_id, member_id, handicap_at_start, final_score_override, score_source, sort_order, members(full_name, current_handicap)').eq('golf_day_id', dayId).order('sort_order', { ascending: true, nullsFirst: false })
+            client.from('golf_day_players').select('id, golf_day_id, member_id, handicap_at_start, final_score_override, score_source, sort_order, members(full_name, current_handicap)').eq('golf_day_id', dayId).order('sort_order', { ascending: true, nullsFirst: false }),
+            loadCurrentDayPresentation(client, dayId)
         ]);
         if (results[0].error) throw results[0].error;
         if (results[1].error) throw results[1].error;
@@ -393,12 +542,66 @@
         `;
     }
 
+    // The promotional presentation (poster/description/prizes/etc.) shown
+    // above the leaderboard/scorer when any such field exists for this
+    // golf day. Nothing renders — not even an empty card — when the day
+    // has none of these fields set, or the migration isn't applied yet
+    // (state.currentPresentation is null in both cases).
+    function renderPresentationBlock() {
+        const info = state.currentPresentation;
+        if (!info) return '';
+        const hasAny = info.posterUrl || info.short_description || info.description
+            || info.reporting_time || info.tee_off_time || info.green_fee
+            || info.event_note || info.sponsor_name
+            || (Array.isArray(info.prizes) && info.prizes.length);
+        if (!hasAny) return '';
+
+        const metaRows = [];
+        if (info.reporting_time) metaRows.push('<p><strong>Reporting Time:</strong> ' + escapeHtml(String(info.reporting_time).slice(0, 5)) + '</p>');
+        if (info.tee_off_time) metaRows.push('<p><strong>Tee Off:</strong> ' + escapeHtml(String(info.tee_off_time).slice(0, 5)) + '</p>');
+        if (info.green_fee) metaRows.push('<p><strong>Green Fee:</strong> ' + escapeHtml(info.green_fee) + '</p>');
+        if (info.sponsor_name) metaRows.push('<p><strong>Sponsor:</strong> ' + escapeHtml(info.sponsor_name) + '</p>');
+        if (info.event_note) metaRows.push('<p><strong>Note:</strong> ' + escapeHtml(info.event_note) + '</p>');
+
+        const prizesHtml = Array.isArray(info.prizes) && info.prizes.length
+            ? '<div class="event-prizes"><h3>Prizes</h3><ul>' + info.prizes.map(function (prize) {
+                return '<li><span>' + escapeHtml(prize.label || '') + '</span><strong>' + escapeHtml(prize.value || '') + '</strong></li>';
+            }).join('') + '</ul></div>'
+            : '';
+
+        return `
+            <section class="mvp-event-presentation">
+                ${info.posterUrl ? '<img src="' + escapeHtml(info.posterUrl) + '" alt="' + escapeHtml(info.poster_alt || 'Event poster') + '" class="mvp-event-poster">' : ''}
+                ${info.short_description ? '<p class="mvp-event-summary">' + escapeHtml(info.short_description) + '</p>' : ''}
+                ${info.description ? '<p>' + escapeHtml(info.description) + '</p>' : ''}
+                ${metaRows.length ? '<div class="mvp-event-meta">' + metaRows.join('') + '</div>' : ''}
+                ${prizesHtml}
+            </section>
+        `;
+    }
+
+    function renderEditEventForm(day) {
+        if (isReadOnlyHistoricalDay(day)) return '';
+        if (!BirdieAuth.getProfile() || !canManageGolfDays(BirdieAuth.getProfile().role)) return '';
+        return `
+            <details class="mvp-admin-details mvp-promo-details">
+                <summary>Edit event / promotion details</summary>
+                <form id="mvp-edit-event-form" class="mvp-form-grid" data-day-id="${day.id}">
+                    ${renderPromoFieldsGrid(state.currentPresentation)}
+                    <button type="submit" class="btn btn-secondary mvp-span-2">Save Event Details</button>
+                </form>
+            </details>
+        `;
+    }
+
     function renderDayDetail(day) {
         const detail = document.getElementById('mvp-day-detail');
         if (!detail) return;
         detail.innerHTML = `
             <div class="mvp-day-hero"><div><p class="mvp-eyebrow">${day.game_number ? 'Game ' + day.game_number : 'Club golf day'}</p><h2>${escapeHtml(day.title)}</h2><p>${escapeHtml(day.venue || 'Venue TBC')} · ${escapeHtml(formatDate(day.event_date))}</p></div><span class="mvp-status mvp-status-${escapeHtml(day.status)}">${escapeHtml(day.status)}</span></div>
+            ${renderPresentationBlock()}
             ${renderDayStatusControls(day)}
+            ${renderEditEventForm(day)}
             ${renderAddPlayer(day)}
             <section class="mvp-leaderboard"><div class="mvp-panel-heading"><div><p class="mvp-eyebrow">Member view</p><h3>${day.status === 'live' ? 'Live Leaderboard' : 'Leaderboard'}</h3></div></div>${renderLeaderboard()}</section>
             ${renderScoreGrid(day)}
@@ -494,7 +697,8 @@
     async function createGolfDay(form) {
         const client = await BirdieAuth.ensureClient();
         const data = new FormData(form);
-        const payload = {
+        const promo = readPromoFieldsFromForm(form);
+        const basePayload = {
             game_number: data.get('game_number') ? Number(data.get('game_number')) : null,
             title: String(data.get('title') || '').trim(),
             venue: String(data.get('venue') || '').trim(),
@@ -502,9 +706,32 @@
             status: 'scheduled', scoring_method: 'gross_stroke_v1', hole_count: 18,
             is_public: data.get('is_public') === 'on', source_type: 'app'
         };
-        const result = await client.from('golf_days').insert(payload).select('id').single();
-        if (result.error) throw result.error;
-        state.currentDayId = result.data.id;
+
+        // The fast creation flow must keep working even if the event-details
+        // migration hasn't been applied to the live project yet — try with
+        // the promo fields first, and fall back to base-only on failure
+        // rather than blocking golf-day creation entirely.
+        let result = await client.from('golf_days').insert(Object.assign({}, basePayload, promo)).select('id').single();
+        if (result.error) {
+            console.error('Birdie MVP golf day create with event details failed, retrying without them (migration may not be applied yet):', result.error);
+            result = await client.from('golf_days').insert(basePayload).select('id').single();
+            if (result.error) throw result.error;
+            window.alert('The golf day was created, but the event/promotion details could not be saved yet — ask your developer to apply the latest database migration.');
+        }
+        const newDayId = result.data.id;
+
+        try {
+            const posterPath = await uploadPosterIfProvided(form, newDayId, null);
+            if (posterPath) {
+                const posterUpdate = await client.from('golf_days').update({ poster_path: posterPath }).eq('id', newDayId);
+                if (posterUpdate.error) throw posterUpdate.error;
+            }
+        } catch (posterError) {
+            console.error('Birdie MVP poster upload failed (golf day still created):', posterError);
+            window.alert('The golf day was created, but the poster could not be uploaded: ' + (posterError.message || 'unknown error'));
+        }
+
+        state.currentDayId = newDayId;
         await renderMemberHub();
     }
 
@@ -554,6 +781,20 @@
         const result = await client.from('golf_days').update({ status: status }).eq('id', state.currentDayId);
         if (result.error) throw result.error;
         await renderMemberHub();
+    }
+
+    async function updateGolfDayPresentation(form) {
+        const dayId = form.getAttribute('data-day-id');
+        if (!dayId) return;
+        const client = await BirdieAuth.ensureClient();
+        const promo = readPromoFieldsFromForm(form);
+        const previousPosterPath = state.currentPresentation ? state.currentPresentation.poster_path : null;
+
+        const posterPath = await uploadPosterIfProvided(form, dayId, previousPosterPath);
+        const payload = Object.assign({}, promo, { poster_path: posterPath });
+        const result = await client.from('golf_days').update(payload).eq('id', dayId);
+        if (result.error) throw result.error;
+        await openGolfDay(dayId);
     }
 
     function shiftCalendar(direction) {
@@ -938,6 +1179,11 @@
         if (event.target.id === 'mvp-add-player-form') {
             event.preventDefault();
             addPlayer(event.target).catch(function (error) { console.error('Birdie MVP add player failed:', error); window.alert('Could not add that player.'); });
+            return;
+        }
+        if (event.target.id === 'mvp-edit-event-form') {
+            event.preventDefault();
+            updateGolfDayPresentation(event.target).catch(function (error) { console.error('Birdie MVP event details update failed:', error); window.alert(error.message || 'Could not save event details.'); });
             return;
         }
         if (event.target.id === 'mvp-import-form') {

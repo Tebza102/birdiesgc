@@ -54,6 +54,9 @@ jobs:
       - name: Mobile Golf Hub CSS regression checks
         run: node scripts/test-mobile-css.js
 
+      - name: Event details / poster upload regression checks
+        run: node scripts/test-event-details.js
+
       - name: Local server smoke test
         shell: bash
         run: |
@@ -71,9 +74,11 @@ jobs:
           curl --fail --silent http://127.0.0.1:4173/js/legacy-import-utils.js >/tmp/legacy-import-utils.js
           curl --fail --silent http://127.0.0.1:4173/js/birdie-mvp.js >/tmp/birdie-mvp.js
           curl --fail --silent http://127.0.0.1:4173/js/birdie-public-events.js >/tmp/birdie-public-events.js
+          curl --fail --silent http://127.0.0.1:4173/ >/tmp/index.html
           grep -q 'member-golf-mount' /tmp/events.html
           grep -q 'SUPABASE_PUBLISHABLE_KEY' /tmp/main.js
           grep -q 'BirdieLegacyImport' /tmp/legacy-import-utils.js
           grep -q 'BirdieAuth' /tmp/birdie-mvp.js
           grep -q 'BirdieLegacyImport' /tmp/birdie-mvp.js
           grep -q 'loadPublicGolfDays' /tmp/birdie-public-events.js
+          grep -q 'js/birdie-public-events.js' /tmp/index.html

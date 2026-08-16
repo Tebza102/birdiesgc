@@ -846,6 +846,26 @@ p {
     gap: 0.8rem;
 }
 
+/* Small, height-bounded thumbnail for a public event card with an
+   uploaded poster — deliberately not the full-size .event-featured-image
+   treatment, to avoid an unpredictable/oversized image inside the
+   calendar list's grid layout. */
+.event-calendar-thumb {
+    width: 100%;
+    max-width: 220px;
+    height: 96px;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    margin-bottom: 0.5rem;
+}
+
+/* No poster uploaded: the featured card has only its content column, so
+   the desktop two-column grid must collapse to one rather than leaving an
+   empty second column. */
+.event-featured-card-no-media {
+    grid-template-columns: 1fr;
+}
+
 .event-calendar-date {
     color: var(--primary-green);
     text-transform: uppercase;

@@ -450,6 +450,16 @@ document.addEventListener('DOMContentLoaded', function() {
         `;
     }
 
+    // Shared with js/birdie-public-events.js so the Supabase-backed public
+    // event rendering can reuse the same countdown markup/timer logic
+    // instead of duplicating it — one countdown implementation, two data
+    // sources (static fallback here, live data there).
+    window.BirdieEventUtils = {
+        formatEventDate: formatEventDate,
+        renderCountdownMarkup: renderCountdownMarkup,
+        startCountdownTimer: startCountdownTimer
+    };
+
     function renderHomepageCountdown() {
         if (!isHomepage()) return;
         const event = getFeaturedEvent();
