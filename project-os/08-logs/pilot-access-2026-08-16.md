@@ -21,5 +21,11 @@ Record the approved pilot management access state for Birdie Squad Golf Club. Th
 ## Verification performed
 The live Supabase project was checked after account creation and showed exactly these three approved `admin`/`management` accounts. Chairman and Treasurer were linked to their existing roster member records.
 
+## Live backend status
+- Gate 2D rich event details + poster support is now applied to live Supabase.
+- The `event-posters` bucket is public-read, accepts JPG/PNG/WebP up to 5 MB, and restricts insert/update/delete to approved `admin`/`management` users.
+- The repository migration was corrected for hosted Supabase by removing an unnecessary attempt to alter ownership-controlled `storage.objects` RLS state.
+- The legacy workbook `SECURITY DEFINER` RPC no longer grants EXECUTE to `anon`/`public`; authenticated access remains and the function's internal approved-admin check remains authoritative.
+
 ## Deployment note
-This access configuration is live in Supabase immediately. Frontend availability still depends on deploying a build that uses the shared Supabase Auth implementation; do not assume the public production site is running the feature branch until deployment is verified.
+A separate Vercel pilot project `birdiesgc-pilot` was created and linked to this GitHub repository so the existing production site at `www.birdiesgc.co.za` is not overwritten during pilot testing. The final publish from the linked authenticated checkout still requires `vercel --prod --yes` to be executed successfully. Do not treat the pilot URL as live until that deployment is confirmed.
