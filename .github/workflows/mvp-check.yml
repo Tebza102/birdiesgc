@@ -34,9 +34,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # scripts/ is Node-only dev/test tooling, never served to a
+          # browser, and its regression tests legitimately reference these
+          # marker strings (asserting shipped files don't contain them) —
+          # exclude it here to avoid a self-referential false positive.
           if grep -RIn \
             --exclude-dir=.git \
             --exclude-dir=.github \
+            --exclude-dir=scripts \
             --include='*.html' \
             --include='*.js' \
             --include='*.css' \
@@ -56,6 +61,9 @@ jobs:
 
       - name: Event details / poster upload regression checks
         run: node scripts/test-event-details.js
+
+      - name: Auth UI / password recovery regression checks
+        run: node scripts/test-auth-ui.js
 
       - name: Local server smoke test
         shell: bash
@@ -77,6 +85,8 @@ jobs:
           curl --fail --silent http://127.0.0.1:4173/ >/tmp/index.html
           grep -q 'member-golf-mount' /tmp/events.html
           grep -q 'SUPABASE_PUBLISHABLE_KEY' /tmp/main.js
+          grep -q 'PASSWORD_RECOVERY' /tmp/main.js
+          grep -q 'data-toggle-visibility' /tmp/main.js
           grep -q 'BirdieLegacyImport' /tmp/legacy-import-utils.js
           grep -q 'BirdieAuth' /tmp/birdie-mvp.js
           grep -q 'BirdieLegacyImport' /tmp/birdie-mvp.js

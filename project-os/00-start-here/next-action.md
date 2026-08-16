@@ -1,15 +1,16 @@
 # Next Action
 
 ## Current Objective
-Complete real-browser/device validation of the live scorer, the mobile layout fix, the Excel workbook import, and the new event-details/poster feature, using the private acceptance-test golf day and real club data (workbook + a real poster image).
+Get the isolated `birdiesgc-pilot` Vercel deployment actually live, then complete real-browser/device validation of login/recovery, the live scorer, mobile layout, the Excel workbook import, and the event-details/poster feature — using the private acceptance-test golf day, real club data, and the real Chairman/Treasurer accounts.
 
 ## Gate Status
 - Gate 1 — Backend/database/RLS/spreadsheet validation: **COMPLETE**.
 - Gate 2 — Auth/calendar/scorer/digital scorecard/live leaderboard: **ENGINEERING COMPLETE; REAL-BROWSER/DEVICE VALIDATION IN PROGRESS**.
-- Gate 2B — Admin Excel workbook upload/import for legacy continuity and backup: **CORRECTED AGAINST THE REAL WORKBOOK (preview, safe null-date-tolerant matching, atomic admin-gated RPC, audit trail, 24 passing unit tests, ordinary hub no longer depends on the migration); MIGRATION NOT YET APPLIED LIVE, THEN NEEDS REAL-WORKBOOK ACCEPTANCE**.
+- Gate 2B — Admin Excel workbook upload/import for legacy continuity and backup: **ENGINEERING COMPLETE; per project log, migration applied live and hardened (`20260816131500_harden_import_rpc_permissions.sql`) — not independently re-verified by this session (no Supabase credentials here)**.
 - Gate 2C — Mobile responsiveness of the Events / Member Golf Hub: **FIXED (CSS-only + a small player-cell total echo); VERIFIED BY STATIC REGRESSION CHECKS AND ARITHMETIC ONLY — NEEDS A REAL PHONE**.
-- Gate 2D — Rich event details + poster upload: **ENGINEERING COMPLETE (schema, public-read/admin-write Storage bucket, create/edit UI, database-backed Featured Event + homepage countdown, 14 passing static regression tests, ordinary hub no longer depends on the migration); MIGRATION NOT YET APPLIED LIVE, THEN NEEDS REAL-POSTER/REAL-BROWSER ACCEPTANCE**.
-- Gate 3 — Private chairman/member preview: **NOT STARTED** (needs a Vercel project link).
+- Gate 2D — Rich event details + poster upload: **ENGINEERING COMPLETE; per project log, migration applied live and corrected for hosted-Supabase Storage RLS (`e0cd424`) — not independently re-verified by this session**.
+- Gate 2E — Pilot auth reliability + password recovery: **ENGINEERING COMPLETE (CDN fallback/timeout, visible loading/error states, Show/Hide password, Forgot password, full PASSWORD_RECOVERY flow, 20 passing static regression tests); NOT EXECUTE-TESTED AGAINST A LIVE PROJECT OR BROWSER**.
+- Gate 3 — Private pilot deployment: **LINKED, NOT YET DEPLOYED** — `apprigate/birdiesgc-pilot` Vercel project created and GitHub-connected; the actual `vercel --prod --yes` push is blocked by this harness's safety classifier and needs a human or explicit permission. Never deploy to `birdiesgc` / `www.birdiesgc.co.za`.
 
 ## Private Acceptance-Test Golf Day
 Created directly in Supabase on 2026-08-16:

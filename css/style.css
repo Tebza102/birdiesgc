@@ -546,6 +546,65 @@ p {
     box-shadow: 0 0 0 3px rgba(65, 120, 69, 0.2);
 }
 
+.auth-login-fields,
+.auth-recovery-fields {
+    display: grid;
+    gap: 0.65rem;
+}
+
+/* The Show/Hide toggle sits inside the input's own box via absolute
+   positioning, so it never adds width and stays safe down to 320px. */
+.auth-password-wrap {
+    position: relative;
+}
+
+#auth-form .auth-password-wrap input {
+    padding-right: 3.6rem;
+}
+
+.auth-toggle-visibility {
+    position: absolute;
+    top: 50%;
+    right: 0.5rem;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: var(--primary-green);
+    font-weight: 700;
+    font-size: 0.8rem;
+    padding: 0.3rem 0.4rem;
+    line-height: 1;
+}
+
+.auth-toggle-visibility:hover {
+    text-decoration: underline;
+}
+
+.auth-link-button {
+    justify-self: start;
+    background: transparent;
+    border: none;
+    color: var(--primary-green);
+    font-weight: 700;
+    font-size: 0.85rem;
+    padding: 0.2rem 0;
+    text-decoration: underline;
+}
+
+.auth-link-button:disabled {
+    opacity: 0.6;
+    text-decoration: none;
+    cursor: default;
+}
+
+.auth-status {
+    min-height: 1.1rem;
+    margin: 0.1rem 0 0.2rem;
+    color: var(--primary-green);
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
 .auth-error {
     min-height: 1.1rem;
     margin: 0.1rem 0 0.2rem;
