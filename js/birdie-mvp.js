@@ -29,6 +29,13 @@
         return role === 'admin' || role === 'management';
     }
 
+    // A closed Excel-imported historical round is a read-only record, not a
+    // live round that can be reopened, staffed or hand-scored. Its data
+    // lives entirely in `final_score_override`; there is nothing to score.
+    function isReadOnlyHistoricalDay(day) {
+        return !!day && day.status === 'closed' && day.source_type === 'excel_import';
+    }
+
     function roleLabel(role) {
         const labels = { admin: 'Admin', management: 'Management', scorer: 'Scorer', member: 'Member' };
         return labels[role] || 'Member';
@@ -311,6 +318,7 @@
     }
 
     function renderAddPlayer(day) {
+        if (isReadOnlyHistoricalDay(day)) return '';
         if (!BirdieAuth.getProfile() || !isStaffRole(BirdieAuth.getProfile().role)) return '';
         const existing = new Set(state.currentPlayers.map(function (player) { return player.member_id; }));
         const available = state.members.filter(function (member) { return !existing.has(member.id); });
@@ -326,11 +334,13 @@
     }
 
     function renderDayStatusControls(day) {
+        if (isReadOnlyHistoricalDay(day)) return '';
         if (!BirdieAuth.getProfile() || !canManageGolfDays(BirdieAuth.getProfile().role)) return '';
         return `<div class="mvp-status-actions">${day.status !== 'live' ? '<button type="button" class="btn btn-secondary" data-day-status="live">Start Live Round</button>' : ''}${day.status !== 'closed' ? '<button type="button" class="btn btn-outline" data-day-status="closed">Close Round</button>' : ''}</div>`;
     }
 
     function renderScoreGrid(day) {
+        if (isReadOnlyHistoricalDay(day)) return '';
         if (!BirdieAuth.getProfile() || !isStaffRole(BirdieAuth.getProfile().role) || !state.currentPlayers.length) return '';
         const holeHeaders = Array.from({ length: day.hole_count }, function (_, index) { return `<th>H${index + 1}</th>`; }).join('');
         const rows = state.currentPlayers.map(function (player) {
