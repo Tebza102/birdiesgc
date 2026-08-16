@@ -46,13 +46,15 @@ const BirdieAuth = (function () {
             return null;
         }
         const client = await ensureClient();
-        const result = await client.from('user_profiles').select('role, member_id').eq('id', user.id).maybeSingle();
+        const result = await client.from('user_profiles').select('role, member_id, approved').eq('id', user.id).maybeSingle();
         if (result.error) {
             console.error('Birdie Auth profile load failed:', result.error);
-            state.profile = { role: 'member', member_id: null };
+            // Fail closed: an unreadable profile is treated as not approved,
+            // matching RLS's own default (new accounts start unapproved).
+            state.profile = { role: 'member', member_id: null, approved: false };
             return state.profile;
         }
-        state.profile = result.data || { role: 'member', member_id: null };
+        state.profile = result.data || { role: 'member', member_id: null, approved: false };
         return state.profile;
     }
 
@@ -166,7 +168,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (session) {
             desktopBtn.textContent = 'Logout';
             mobileBtn.textContent = 'Logout';
-            roleTag.textContent = roleLabel(profile ? profile.role : 'member');
+            roleTag.textContent = (profile && profile.approved === false)
+                ? 'Pending Approval'
+                : roleLabel(profile ? profile.role : 'member');
             roleTag.classList.add('active');
         } else {
             desktopBtn.textContent = 'Login';

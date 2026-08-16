@@ -33,6 +33,21 @@
     border-color: rgba(180, 55, 55, 0.28);
 }
 
+.mvp-state-pending {
+    border-color: rgba(178, 146, 66, 0.35);
+}
+
+.mvp-realtime-warning {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 0.3rem 0.65rem;
+    background: rgba(255, 255, 255, 0.16);
+    color: var(--text-white);
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
 .mvp-login-card {
     padding: var(--spacing-lg);
     display: flex;

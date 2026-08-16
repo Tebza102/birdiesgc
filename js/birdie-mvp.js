@@ -108,6 +108,20 @@
         `;
     }
 
+    function renderPendingApprovalHub() {
+        const mount = getMount();
+        if (!mount) return;
+        const session = BirdieAuth.getSession();
+        const email = session && session.user && session.user.email ? session.user.email : 'Your account';
+        mount.innerHTML = `
+            <div class="mvp-state-card mvp-state-pending">
+                <p class="mvp-eyebrow">Signed in</p>
+                <h3>Account awaiting club approval</h3>
+                <p>${escapeHtml(email)} is signed in but has not yet been approved for club golf data. Contact a club administrator to approve this account, then log in again.</p>
+            </div>
+        `;
+    }
+
     function chooseCalendarCursor(days) {
         if (state.calendarCursor) return;
         const upcoming = days.filter(function (day) {
@@ -196,6 +210,11 @@
         if (!mount) return;
         if (!BirdieAuth.getSession()) {
             renderLoggedOutHub();
+            return;
+        }
+        const profile = BirdieAuth.getProfile();
+        if (!profile || profile.approved === false) {
+            renderPendingApprovalHub();
             return;
         }
 
@@ -325,7 +344,7 @@
                 const value = scoreFor(player.id, hole);
                 return `<td><input class="mvp-score-input" type="number" inputmode="numeric" min="1" max="30" value="${value}" data-player-id="${player.id}" data-hole="${hole}" aria-label="${escapeHtml(name)} hole ${hole}"></td>`;
             }).join('');
-            return `<tr><th class="mvp-player-sticky"><strong>${escapeHtml(name)}</strong><small>HC ${escapeHtml(player.handicap_at_start || '-')}</small></th>${cells}<td class="mvp-total-sticky"><strong>${total}</strong>${imported ? '<small>Excel</small>' : ''}</td></tr>`;
+            return `<tr><th class="mvp-player-sticky"><strong>${escapeHtml(name)}</strong><small>HC ${escapeHtml(player.handicap_at_start || '-')}</small></th>${cells}<td class="mvp-total-sticky" data-total-for="${player.id}"><strong>${total}</strong>${imported ? '<small>Excel</small>' : ''}</td></tr>`;
         }).join('');
 
         return `
@@ -363,6 +382,51 @@
             console.error('Birdie MVP day load failed:', error);
             if (detail) detail.innerHTML = '<div class="mvp-state-card mvp-state-error"><h3>Could not load this golf day</h3><p>Please try again.</p></div>';
         }
+    }
+
+    // Updates leaderboard totals/positions and the score grid's total cells
+    // and (non-focused) values in place, without recreating the score grid's
+    // <input> elements. This preserves scroll position, focus and the
+    // in-progress `is-saved` state on the scorer's inputs — a full
+    // openGolfDay() re-render would reset all three on every save.
+    function applyScoreGridLiveUpdate() {
+        const day = getCurrentDay();
+        state.currentPlayers.forEach(function (player) {
+            const leaderboard = getLeaderboardRow(player.id);
+            const total = leaderboard && leaderboard.total_score != null ? leaderboard.total_score : '-';
+            const totalCell = document.querySelector('[data-total-for="' + player.id + '"] strong');
+            if (totalCell) totalCell.textContent = total;
+
+            if (player.score_source === 'imported_total' || !day) return;
+            for (let hole = 1; hole <= day.hole_count; hole += 1) {
+                const input = document.querySelector('.mvp-score-input[data-player-id="' + player.id + '"][data-hole="' + hole + '"]');
+                if (!input || document.activeElement === input) continue;
+                const value = String(scoreFor(player.id, hole));
+                if (input.value !== value) input.value = value;
+            }
+        });
+    }
+
+    function updateLeaderboardSection() {
+        const section = document.querySelector('#mvp-day-detail .mvp-leaderboard');
+        if (!section) return false;
+        const heading = section.querySelector('.mvp-panel-heading');
+        section.innerHTML = (heading ? heading.outerHTML : '') + renderLeaderboard();
+        return true;
+    }
+
+    async function refreshCurrentDayLite(dayId) {
+        if (state.currentDayId !== dayId) return;
+        if (!document.getElementById('mvp-day-detail')) {
+            await openGolfDay(dayId);
+            return;
+        }
+        await loadCurrentDayData(dayId);
+        if (!updateLeaderboardSection()) {
+            await openGolfDay(dayId);
+            return;
+        }
+        applyScoreGridLiveUpdate();
     }
 
     function renderIndividualScorecard(playerId) {
@@ -435,7 +499,7 @@
             input.classList.remove('is-error');
             input.classList.add('is-saved');
             window.setTimeout(function () { input.classList.remove('is-saved'); }, 700);
-            await openGolfDay(state.currentDayId);
+            await refreshCurrentDayLite(state.currentDayId);
         } catch (error) {
             console.error('Birdie MVP score save failed:', error);
             input.classList.add('is-error');
@@ -463,12 +527,44 @@
         calendar.replaceWith(wrapper.firstElementChild);
     }
 
-    function scheduleRealtimeRefresh() {
+    function setRealtimeStatusWarning(message) {
+        const bar = document.querySelector('.mvp-member-bar');
+        if (!bar) return;
+        let warning = bar.querySelector('.mvp-realtime-warning');
+        if (!warning) {
+            warning = document.createElement('span');
+            warning.className = 'mvp-realtime-warning';
+            bar.appendChild(warning);
+        }
+        warning.textContent = message;
+    }
+
+    function clearRealtimeStatusWarning() {
+        const warning = document.querySelector('.mvp-realtime-warning');
+        if (warning) warning.remove();
+    }
+
+    // A hole_scores change (the frequent, per-keystroke case, including the
+    // scorer's own save landing back over Realtime) uses the lightweight
+    // path so the score grid's scroll/focus/is-saved state survive it.
+    // Rarer staff actions (add player, create/close a golf day) still get a
+    // full re-render since they change the surrounding controls, not just totals.
+    function scheduleRealtimeRefresh(payload) {
         if (!BirdieAuth.getSession()) return;
         if (state.refreshTimer) window.clearTimeout(state.refreshTimer);
+        const table = payload && payload.table;
         state.refreshTimer = window.setTimeout(function () {
-            if (state.currentDayId) openGolfDay(state.currentDayId);
-            else renderMemberHub();
+            if (!state.currentDayId) {
+                renderMemberHub();
+                return;
+            }
+            if (table === 'hole_scores') {
+                refreshCurrentDayLite(state.currentDayId).catch(function (error) {
+                    console.error('Birdie MVP live score refresh failed:', error);
+                });
+                return;
+            }
+            openGolfDay(state.currentDayId);
         }, 250);
     }
 
@@ -479,13 +575,24 @@
             await client.removeChannel(state.realtimeChannel);
             state.realtimeChannel = null;
         }
+        clearRealtimeStatusWarning();
         if (!BirdieAuth.getSession()) return;
         state.realtimeChannel = client
             .channel('birdie-squad-mvp-live')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'hole_scores' }, scheduleRealtimeRefresh)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'golf_day_players' }, scheduleRealtimeRefresh)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'golf_days' }, scheduleRealtimeRefresh)
-            .subscribe();
+            .subscribe(function (status, error) {
+                if (status === 'SUBSCRIBED') {
+                    console.info('Birdie MVP Realtime connected.');
+                    clearRealtimeStatusWarning();
+                    return;
+                }
+                if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+                    console.error('Birdie MVP Realtime connection issue:', status, error);
+                    setRealtimeStatusWarning('Live updates unavailable right now — refresh to see the latest scores.');
+                }
+            });
     }
 
     document.addEventListener('click', function (event) {
