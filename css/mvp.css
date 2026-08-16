@@ -604,6 +604,77 @@
     font-size: 1.35rem;
 }
 
+.mvp-import-panel {
+    margin-top: var(--spacing-lg);
+}
+
+.mvp-import-panel input[type="file"] {
+    display: block;
+    padding: 0.5rem 0;
+    font: inherit;
+}
+
+#mvp-import-result {
+    margin-top: var(--spacing-md);
+}
+
+.mvp-import-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.65rem;
+    margin-bottom: var(--spacing-sm);
+}
+
+.mvp-import-summary > div {
+    padding: 0.75rem;
+    border-radius: var(--radius-md);
+    background: var(--bg-off-white);
+    text-align: center;
+}
+
+.mvp-import-summary strong {
+    display: block;
+    font-size: 1.35rem;
+    color: var(--primary-green);
+}
+
+.mvp-import-summary span {
+    font-size: 0.72rem;
+    color: var(--text-light);
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.mvp-import-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 0.25rem 0.6rem;
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.mvp-import-badge-new {
+    color: #0f5b2d;
+    background: #dff4e6;
+}
+
+.mvp-import-badge-update {
+    color: #6d5210;
+    background: #f7edcf;
+}
+
+.mvp-import-badge-unchanged {
+    color: var(--text-medium);
+    background: var(--bg-off-white);
+}
+
+.mvp-import-badge-conflict {
+    color: #7b3030;
+    background: #f4dddd;
+}
+
 @media (max-width: 900px) {
     .mvp-hub-grid {
         grid-template-columns: 1fr;

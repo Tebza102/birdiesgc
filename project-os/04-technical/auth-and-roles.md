@@ -30,12 +30,13 @@ Do not use `user_metadata` for roles or approval decisions.
 | Member | View member golf calendar, leaderboard and digital scorecards | Create golf days, add players or edit scores |
 | Scorer | Member permissions plus add golf-day players and capture/update scores | Change platform security, approve users, or create broader administration |
 | Management | Scorer permissions plus create/manage golf days and roster data within MVP scope | Bypass RLS or access platform secrets |
-| Admin | Management permissions and controlled pilot account/role administration outside the browser client | Bypass security controls or expose secrets |
+| Admin | Management permissions, controlled pilot account/role administration outside the browser client, and importing the club's legacy Excel workbook | Bypass security controls or expose secrets |
 
 ## Protected Areas
 - Member golf-day/live leaderboard data requires a real Supabase session and `user_profiles.approved = true`.
 - Score writes additionally require role `scorer`, `management`, or `admin`.
 - Golf-day create/status administration requires role `management` or `admin`.
+- Legacy workbook import (`Import Latest Club Workbook`) requires role `admin` specifically — management/scorer/member accounts never see the control, and the `import_legacy_workbook()` RPC independently re-checks `role = 'admin'` and `approved = true` against `user_profiles` before writing anything, regardless of what the browser sends.
 - UI visibility is convenience only; RLS is authoritative.
 
 ## Public Routes

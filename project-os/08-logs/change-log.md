@@ -199,3 +199,42 @@ Pass. All three review findings resolved; PR #1 updated with the fix summary and
 
 **Next action:**
 - Await human review/acceptance testing on PR #1. Do not merge to `main`.
+
+### 2026-08-16 13:00 — Admin Legacy Excel Workbook Import (Gate 2B)
+
+**Changed by:** Claude, executing `project-os/10-prompts/claude-excel-import-mvp.md`
+
+**Files changed:**
+- supabase/migrations/20260816120000_legacy_workbook_import.sql
+- js/legacy-import-utils.js
+- js/birdie-mvp.js
+- events.html
+- css/mvp.css
+- scripts/test-legacy-import.js
+- .github/workflows/mvp-check.yml
+- project-os/00-start-here/current-status.md
+- project-os/00-start-here/next-action.md
+- project-os/04-technical/data-model.md
+- project-os/04-technical/auth-and-roles.md
+
+**Summary:**
+Implemented the locked Gate 2B requirement: an admin-only `.xlsx` workbook import so the club can bring newer legacy games into Supabase without manual recapture, while the workbook stays an independent backup. The browser parses the workbook locally (SheetJS `xlsx@0.18.5`, Apache-2.0, pinned via jsDelivr `+esm` — the last npm-published release; newer SheetJS builds moved to a separate CDN this codebase doesn't otherwise use) and shows a full preview — new/matched/unchanged/skipped counts, a per-game table, and plain-language conflict notes — before any database write. Added `golf_days.legacy_import_key`, a deterministic `game_number|venue[|date]` fingerprint with a partial unique index, so a re-imported historical game updates the existing round instead of duplicating it; backfilled the seeded Game 15 round with its key in the same migration. The only write path is `public.import_legacy_workbook(payload jsonb)`, a `security definer` RPC with `search_path = ''` that independently re-checks the caller is an approved `admin` against `user_profiles`, re-derives the legacy key and name normalization itself rather than trusting the browser, and refuses to write into any golf day whose `source_type` isn't `excel_import` — an app-created/live round can never be touched, even by a malicious payload. A `workbook_imports` audit table (unique on `checksum_sha256`) blocks re-importing the exact same file and records who/when/what. Pure parsing/normalization/categorization logic was factored into `js/legacy-import-utils.js` (`window.BirdieLegacyImport`) so the exact same code the browser preview uses is also exercised by a new dependency-free Node test script, without duplicating the logic or adding a package.json dependency.
+
+**Tests run:**
+- `node scripts/test-legacy-import.js`: 15/15 passing — labelled-column "Player details" parsing (not a hard-coded row/column), plus-handicaps preserved as text, "Games" row mapping onto roster order, unparsed dates left null instead of guessed, Game-15-style payload reproducing Carol 71 / Slenda 72 / Duke 75 ordering, deterministic legacy-key generation, ambiguous member/game handling skipped rather than guessed, and conflict rows excluded from the commit payload.
+- `node --check` on all shipped JS files including the two new ones: pass.
+- Secret scan (`service_role`/`sb_secret_`): no matches.
+- `npm run build`: pass.
+- Local dev-server smoke test (now also fetching/checking `js/legacy-import-utils.js`): pass.
+- GitHub Actions `Birdie MVP Check`: green on both the branch push and PR #1.
+
+**Result:**
+Pass for everything achievable without a live Supabase project or a real club workbook in this environment. The RPC's admin-gating, duplicate-import blocking, app-round protection, and transactional atomicity are implemented and reviewable in the migration SQL, but were not execute-tested against a live database here — no Supabase CLI/credentials are available in this workspace. That mirrors how prior passes on this branch have handled live-DB/live-browser gaps.
+
+**Risks remaining:**
+- The real latest club workbook was not available in this environment; the feature was built and tested against the documented/validated `Player details` + `Games` layout only, per the finishing brief's explicit instruction not to invent newer contents.
+- RPC behaviour (admin gate, duplicate-checksum block, app-round protection, transactional rollback) has not been exercised against a live Supabase project from this session.
+- Same pre-existing human-only blockers as prior entries: real-browser sign-in, phone-device check, second-account Realtime proof, and Vercel preview link.
+
+**Next action:**
+- A human admin should upload the club's actual latest `.xlsx` workbook on the Events page, review the preview, and confirm the import, then verify the resulting golf day(s)/leaderboard look correct. Do not merge to `main`.

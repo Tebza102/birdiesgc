@@ -14,7 +14,8 @@
         currentLeaderboard: [],
         realtimeChannel: null,
         calendarCursor: null,
-        refreshTimer: null
+        refreshTimer: null,
+        pendingImport: null
     };
 
     function isElement(target) {
@@ -80,7 +81,7 @@
         const client = await BirdieAuth.ensureClient();
         const result = await client
             .from('golf_days')
-            .select('id, game_number, title, venue, event_date, status, hole_count, is_public, source_type, source_reference, created_at')
+            .select('id, game_number, title, venue, event_date, status, hole_count, is_public, source_type, source_reference, legacy_import_key, created_at')
             .order('event_date', { ascending: false, nullsFirst: false })
             .order('created_at', { ascending: false });
         if (result.error) throw result.error;
@@ -247,6 +248,7 @@
                         ${renderGolfDayList(state.golfDays)}
                     </section>
                 </div>
+                ${renderImportPanel()}
                 <section id="mvp-day-detail" class="mvp-day-detail"><div class="mvp-empty"><p>Select a golf day to view its leaderboard and scorecard.</p></div></section>
             `;
 
@@ -605,6 +607,258 @@
             });
     }
 
+    // -----------------------------------------------------------------
+    // Legacy Excel workbook import (admin only)
+    //
+    // The workbook is parsed entirely in the browser (nothing is written
+    // until Admin explicitly confirms the preview). Pinned to the last
+    // npm-published SheetJS (xlsx) release — Apache-2.0, still served from
+    // jsDelivr's `+esm` transform, the same distribution mechanism already
+    // used for the Supabase client in this file. Newer SheetJS builds
+    // (0.20.x+) moved to cdn.sheetjs.com, a distribution this codebase does
+    // not otherwise depend on; 0.18.5 keeps a single trusted CDN provider.
+    //
+    // Row parsing, normalization, legacy-key derivation and categorization
+    // live in js/legacy-import-utils.js (window.BirdieLegacyImport) so the
+    // exact same logic can run under a plain Node test without a browser,
+    // Supabase, or the XLSX library itself.
+    // -----------------------------------------------------------------
+    const XLSX_MODULE_URL = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm';
+    let xlsxModulePromise = null;
+
+    function ensureXlsx() {
+        if (!xlsxModulePromise) xlsxModulePromise = import(XLSX_MODULE_URL);
+        return xlsxModulePromise;
+    }
+
+    async function computeSha256Hex(arrayBuffer) {
+        const digest = await crypto.subtle.digest('SHA-256', arrayBuffer);
+        return Array.from(new Uint8Array(digest)).map(function (byte) { return byte.toString(16).padStart(2, '0'); }).join('');
+    }
+
+    function findSheetName(workbook, wantedLower) {
+        return workbook.SheetNames.find(function (name) { return name.trim().toLowerCase() === wantedLower; })
+            || workbook.SheetNames.find(function (name) { return name.trim().toLowerCase().indexOf(wantedLower) !== -1; })
+            || null;
+    }
+
+    async function parseWorkbookFile(file) {
+        if (!/\.xlsx$/i.test(file.name)) {
+            throw new Error('Only .xlsx workbook files are supported.');
+        }
+        const buffer = await file.arrayBuffer();
+        const checksum = await computeSha256Hex(buffer);
+        const XLSX = await ensureXlsx();
+        const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
+
+        const playerSheetName = findSheetName(workbook, 'player details') || findSheetName(workbook, 'player');
+        const gamesSheetName = findSheetName(workbook, 'games');
+        if (!playerSheetName || !gamesSheetName) {
+            throw new Error('This workbook is missing the expected "Player details" and "Games" sheets.');
+        }
+
+        const playerRows = XLSX.utils.sheet_to_json(workbook.Sheets[playerSheetName], { header: 1, raw: false, defval: '' });
+        const members = BirdieLegacyImport.parsePlayerDetailsRows(playerRows);
+        if (!members.length) {
+            throw new Error('No roster rows were found under "Member Name" on the Player details sheet.');
+        }
+
+        const gameRows = XLSX.utils.sheet_to_json(workbook.Sheets[gamesSheetName], { header: 1, defval: null });
+        const games = BirdieLegacyImport.parseGamesRows(gameRows, members.map(function (m) { return m.full_name; }));
+
+        return { filename: file.name, checksum: checksum, members: members, games: games };
+    }
+
+    // Read-only comparison against currently loaded Supabase data. Never
+    // writes anything; the atomic RPC is the only thing that ever commits.
+    async function buildImportPreview(parsed) {
+        const client = await BirdieAuth.ensureClient();
+
+        const existingImport = await client.from('workbook_imports').select('id, filename, imported_at').eq('checksum_sha256', parsed.checksum).maybeSingle();
+        if (existingImport.error) throw existingImport.error;
+        if (existingImport.data) {
+            return { alreadyImported: existingImport.data, members: [], games: [] };
+        }
+
+        const membersResult = await client.from('members').select('id, full_name, current_handicap');
+        if (membersResult.error) throw membersResult.error;
+        const existingMembers = membersResult.data || [];
+
+        const memberPreview = parsed.members.map(function (member) {
+            return BirdieLegacyImport.categorizeMember(member, existingMembers);
+        });
+
+        const existingExcelDays = (state.golfDays || []).filter(function (day) { return day.source_type === 'excel_import'; });
+        const matchedDayIds = [];
+        const gamesWithKeys = parsed.games.map(function (game) {
+            const categorized = BirdieLegacyImport.categorizeGame(game, existingExcelDays);
+            if (categorized.existingDay) matchedDayIds.push(categorized.existingDay.id);
+            return categorized;
+        });
+
+        const existingPlayersByDay = {};
+        if (matchedDayIds.length) {
+            const playersResult = await client.from('golf_day_players').select('golf_day_id, member_id, final_score_override, members(full_name)').in('golf_day_id', matchedDayIds);
+            if (playersResult.error) throw playersResult.error;
+            (playersResult.data || []).forEach(function (row) {
+                if (!existingPlayersByDay[row.golf_day_id]) existingPlayersByDay[row.golf_day_id] = [];
+                existingPlayersByDay[row.golf_day_id].push(row);
+            });
+        }
+
+        const gamePreview = gamesWithKeys.map(function (game) {
+            if (game.category === 'conflict') return game;
+            if (!game.existingDay) return Object.assign({}, game, { category: 'new' });
+            const existingRows = existingPlayersByDay[game.existingDay.id] || [];
+            let changed = false;
+            game.players.forEach(function (player) {
+                const norm = BirdieLegacyImport.normalizeName(player.full_name);
+                const existingRow = existingRows.find(function (row) { return row.members && BirdieLegacyImport.normalizeName(row.members.full_name) === norm; });
+                if (!existingRow || existingRow.final_score_override !== player.final_score) changed = true;
+            });
+            return Object.assign({}, game, { category: changed ? 'update' : 'unchanged' });
+        });
+
+        return { alreadyImported: null, members: memberPreview, games: gamePreview };
+    }
+
+    function importCategoryLabel(category) {
+        const labels = { new: 'New', update: 'Update', unchanged: 'Unchanged', conflict: 'Skipped — needs review' };
+        return labels[category] || category;
+    }
+
+    function renderImportPreview(parsed, preview) {
+        if (preview.alreadyImported) {
+            const when = preview.alreadyImported.imported_at ? formatDate(String(preview.alreadyImported.imported_at).slice(0, 10)) : 'earlier';
+            return `
+                <div class="mvp-state-card mvp-state-pending">
+                    <h3>Already imported</h3>
+                    <p>This exact workbook (${escapeHtml(preview.alreadyImported.filename)}) was already imported on ${escapeHtml(when)}. Nothing further to do — choose a newer workbook if the club has played since then.</p>
+                </div>
+            `;
+        }
+
+        const memberCounts = { new: 0, update: 0, unchanged: 0, conflict: 0 };
+        preview.members.forEach(function (m) { memberCounts[m.category] = (memberCounts[m.category] || 0) + 1; });
+        const gameCounts = { new: 0, update: 0, unchanged: 0, conflict: 0 };
+        preview.games.forEach(function (g) { gameCounts[g.category] = (gameCounts[g.category] || 0) + 1; });
+
+        const gameRows = preview.games.map(function (game) {
+            return `
+                <tr>
+                    <td>${game.game_number != null ? escapeHtml(game.game_number) : '—'}</td>
+                    <td>${escapeHtml(game.venue || 'Venue TBC')}</td>
+                    <td>${game.event_date ? escapeHtml(formatDate(game.event_date)) : 'Date TBC'}</td>
+                    <td>${game.players.length}</td>
+                    <td><span class="mvp-import-badge mvp-import-badge-${escapeHtml(game.category)}">${escapeHtml(importCategoryLabel(game.category))}</span>${game.reason ? '<small>' + escapeHtml(game.reason) + '</small>' : ''}</td>
+                </tr>
+            `;
+        }).join('');
+
+        const conflictMembers = preview.members.filter(function (m) { return m.category === 'conflict'; });
+
+        return `
+            <div class="mvp-import-summary">
+                <div><strong>${memberCounts.new}</strong><span>New players</span></div>
+                <div><strong>${memberCounts.update}</strong><span>Handicap updates</span></div>
+                <div><strong>${gameCounts.new}</strong><span>New games</span></div>
+                <div><strong>${gameCounts.update}</strong><span>Games to update</span></div>
+                <div><strong>${gameCounts.unchanged}</strong><span>Unchanged games</span></div>
+                <div><strong>${gameCounts.conflict + memberCounts.conflict}</strong><span>Skipped / needs review</span></div>
+            </div>
+            <p class="mvp-small-note">Live rounds already being played in the app will never be overwritten by a workbook import.</p>
+            ${conflictMembers.length ? `<p class="mvp-small-note">Skipped players (need manual review): ${conflictMembers.map(function (m) { return escapeHtml(m.full_name); }).join(', ')}.</p>` : ''}
+            <div class="mvp-table-wrap">
+                <table class="mvp-leaderboard-table">
+                    <thead><tr><th>Game</th><th>Venue</th><th>Date</th><th>Players</th><th>Status</th></tr></thead>
+                    <tbody>${gameRows || '<tr><td colspan="5">No games were found in this workbook.</td></tr>'}</tbody>
+                </table>
+            </div>
+            <button type="button" class="btn btn-primary" data-import-commit>Import Workbook</button>
+        `;
+    }
+
+    function renderImportPanel() {
+        const profile = BirdieAuth.getProfile();
+        if (!profile || profile.role !== 'admin') return '';
+        return `
+            <section class="mvp-panel mvp-import-panel">
+                <div class="mvp-panel-heading">
+                    <div>
+                        <p class="mvp-eyebrow">Admin only</p>
+                        <h3>Import Latest Club Workbook</h3>
+                        <p>Bring newer legacy games from the club's Excel workbook into the platform. The workbook remains your independent backup.</p>
+                    </div>
+                </div>
+                <form id="mvp-import-form" class="mvp-inline-form">
+                    <label>Choose Excel File<input type="file" id="mvp-import-file" accept=".xlsx" required></label>
+                    <button type="submit" class="btn btn-secondary">Preview Import</button>
+                </form>
+                <div id="mvp-import-result"></div>
+            </section>
+        `;
+    }
+
+    async function handleImportPreviewSubmit(form) {
+        const resultEl = document.getElementById('mvp-import-result');
+        const fileInput = form.querySelector('#mvp-import-file');
+        const file = fileInput && fileInput.files ? fileInput.files[0] : null;
+        if (!resultEl) return;
+        if (!file) {
+            resultEl.innerHTML = '<p class="mvp-small-note">Choose an .xlsx file first.</p>';
+            return;
+        }
+
+        resultEl.innerHTML = '<div class="mvp-loading">Reading workbook...</div>';
+        try {
+            const parsed = await parseWorkbookFile(file);
+            const preview = await buildImportPreview(parsed);
+            state.pendingImport = { parsed: parsed, preview: preview };
+            resultEl.innerHTML = renderImportPreview(parsed, preview);
+        } catch (error) {
+            console.error('Birdie MVP workbook preview failed:', error);
+            state.pendingImport = null;
+            resultEl.innerHTML = `<div class="mvp-state-card mvp-state-error"><h3>Could not read this workbook</h3><p>${escapeHtml(error.message || 'Please check the file and try again.')}</p></div>`;
+        }
+    }
+
+    async function handleImportCommit() {
+        const resultEl = document.getElementById('mvp-import-result');
+        if (!resultEl || !state.pendingImport) return;
+        const { parsed, preview } = state.pendingImport;
+        const payload = BirdieLegacyImport.buildImportPayload(parsed, preview);
+        const commitBtn = resultEl.querySelector('[data-import-commit]');
+        if (commitBtn) {
+            commitBtn.disabled = true;
+            commitBtn.textContent = 'Importing...';
+        }
+
+        try {
+            const client = await BirdieAuth.ensureClient();
+            const result = await client.rpc('import_legacy_workbook', { payload: payload });
+            if (result.error) throw result.error;
+            const summary = result.data || {};
+            state.pendingImport = null;
+            resultEl.innerHTML = `
+                <div class="mvp-state-card">
+                    <h3>Import complete</h3>
+                    <p>${escapeHtml(summary.games_created || 0)} new game(s), ${escapeHtml(summary.games_updated || 0)} updated, ${escapeHtml(summary.members_created || 0)} new player(s), ${escapeHtml(summary.members_updated || 0)} handicap update(s). ${(summary.games_skipped || summary.members_skipped || summary.players_skipped) ? 'Some rows needed manual review and were skipped.' : ''}</p>
+                </div>
+            `;
+            await renderMemberHub();
+        } catch (error) {
+            console.error('Birdie MVP workbook import failed:', error);
+            if (commitBtn) {
+                commitBtn.disabled = false;
+                commitBtn.textContent = 'Import Workbook';
+            }
+            const message = document.createElement('div');
+            message.className = 'mvp-state-card mvp-state-error';
+            message.innerHTML = `<h3>Import failed</h3><p>${escapeHtml(error.message || 'Please try again.')}</p>`;
+            resultEl.insertBefore(message, resultEl.firstChild);
+        }
+    }
+
     document.addEventListener('click', function (event) {
         if (!isElement(event.target)) return;
         const login = event.target.closest('[data-mvp-login]');
@@ -625,7 +879,9 @@
         const calendarShift = event.target.closest('[data-calendar-shift]');
         if (calendarShift) { shiftCalendar(Number(calendarShift.getAttribute('data-calendar-shift')) || 0); return; }
         const statusButton = event.target.closest('[data-day-status]');
-        if (statusButton) updateDayStatus(statusButton.getAttribute('data-day-status')).catch(function (error) { console.error('Birdie MVP status update failed:', error); window.alert('Could not update the round status.'); });
+        if (statusButton) { updateDayStatus(statusButton.getAttribute('data-day-status')).catch(function (error) { console.error('Birdie MVP status update failed:', error); window.alert('Could not update the round status.'); }); return; }
+        const importCommit = event.target.closest('[data-import-commit]');
+        if (importCommit) { handleImportCommit(); return; }
     });
 
     document.addEventListener('submit', function (event) {
@@ -638,6 +894,11 @@
         if (event.target.id === 'mvp-add-player-form') {
             event.preventDefault();
             addPlayer(event.target).catch(function (error) { console.error('Birdie MVP add player failed:', error); window.alert('Could not add that player.'); });
+            return;
+        }
+        if (event.target.id === 'mvp-import-form') {
+            event.preventDefault();
+            handleImportPreviewSubmit(event.target).catch(function (error) { console.error('Birdie MVP workbook preview failed:', error); window.alert('Could not read that workbook.'); });
         }
     });
 
