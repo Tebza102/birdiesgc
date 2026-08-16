@@ -48,6 +48,17 @@ Implement safe historical matching server-side and in the preview:
 
 You may keep a `legacy_import_key` as a fingerprint/audit aid, but do not rely on exact full-key equality as the sole identity rule when a date can be missing. Adjust the unique/index strategy if necessary so the fallback logic is safe and future dated records cannot collide incorrectly.
 
+### 5. Normal Events/Member Golf Hub must not depend on an unapplied optional import migration
+Real-browser testing after the first Gate 2B build exposed a regression: `loadGolfDays()` immediately selected `legacy_import_key` even though the migration had intentionally not yet been applied to the live Supabase project. PostgREST returned HTTP 400 and the entire Member Golf Hub became unusable.
+
+Fix this rollout dependency:
+- Core Events/member-hub loading must query only columns that are guaranteed by the already-applied base schema.
+- Do not include `legacy_import_key` in the normal `loadGolfDays()` select unless the migration is already known to exist.
+- The Excel import feature may separately probe/query Gate 2B fields/tables only when Admin opens/uses that feature.
+- If Gate 2B backend objects are not installed yet (`legacy_import_key`, `workbook_imports`, `import_legacy_workbook`), the normal Golf Hub must continue working and the import panel should show a clear non-fatal `Import backend not installed yet`/disabled state rather than crashing the hub.
+- Realtime for ordinary golf days must remain unaffected.
+- Add a regression test/smoke assertion covering the pre-migration state or otherwise prove the ordinary hub does not require Gate 2B schema objects.
+
 ## Required test-fixture correction
 Replace/add tests so they mirror the actual workbook layout, not a simplified invented layout. At minimum test:
 1. Horizontal `Player details`: `Member Name` row + `HC` row across columns.
@@ -60,6 +71,7 @@ Replace/add tests so they mirror the actual workbook layout, not a simplified in
 8. Conflicting/non-unique fallback candidates are skipped and surfaced.
 9. Game-15-style result still reproduces Carol 71, Slenda 72, Duke 75 from the fixture.
 10. Existing app-created round protection, admin gate, exact-workbook checksum protection and atomic RPC behavior remain intact.
+11. Ordinary Events/member-hub loading works when the Gate 2B migration objects do not exist yet.
 
 ## Migration status
 The Gate 2B migration has NOT been applied to the live Birdie Supabase project. Keep it unapplied until this correction is complete and reviewed. It is therefore safe to amend/replace the migration file rather than layering a live repair migration.
@@ -73,4 +85,4 @@ Run:
 - local server smoke test
 - GitHub Actions `Birdie MVP Check`
 
-Update Project OS and PR #1 with the corrected behavior. Explicitly state that the tests now mirror the real workbook orientation/labels. Do not merge to `main`. Do not stop for routine questions.
+Update Project OS and PR #1 with the corrected behavior. Explicitly state that the tests now mirror the real workbook orientation/labels and that the ordinary hub works before the Gate 2B migration is installed. Do not merge to `main`. Do not stop for routine questions.
