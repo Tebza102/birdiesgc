@@ -333,40 +333,71 @@ p {
 
 /* Mobile Styles - Hide Partner button in header, adjust header */
 @media (max-width: 767px) {
+    /* Tighter mobile gutter. Utility pages (Events/Member Golf Hub) also
+       had a second, additive gutter from .member-golf-section — removed
+       there so the two no longer stack into an oversized nested margin. */
+    .container {
+        padding: 0 var(--spacing-sm);
+    }
+
     .header {
-        padding: 0.75rem 0;
+        padding: 0.4rem 0;
     }
-    
+
+    /* Compact, legible header: shorter logo, and an opaque/blurred
+       background (was a 25%-opacity white pill designed for dark hero
+       backgrounds) so it reads clearly as chrome and doesn't visually
+       obscure page content while scrolling on non-hero pages. */
     .header-container {
-        padding: 0.5rem 1rem;
+        padding: 0.4rem 0.85rem;
+        background-color: rgba(244, 245, 242, 0.94);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
     }
-    
+
     .logo-img {
-        height: 80px;
+        height: 56px;
     }
-    
+
     .header-cta .btn-primary {
         display: none;
     }
 
+    /* Re-themed for the now-light mobile header background — the desktop
+       btn-login (white-on-translucent-white) is designed for a dark hero
+       backdrop and would be unreadable here. */
     .header-cta .btn-login {
         display: inline-flex;
         padding: 0.5rem 0.8rem;
         font-size: 0.82rem;
+        background-color: rgba(65, 120, 69, 0.1);
+        color: var(--primary-green);
+        border-color: rgba(65, 120, 69, 0.35);
     }
 
     .header-cta .auth-role-tag {
         display: none !important;
     }
-    
+
     .nav-desktop {
         display: none;
     }
-    
+
     .mobile-menu-btn {
         display: flex;
     }
-    
+
+    .mobile-menu-btn span {
+        background-color: var(--primary-green);
+        box-shadow: none;
+    }
+
+    /* Matches the shorter mobile header height above. */
+    .nav-mobile {
+        top: 74px;
+    }
+
     /* Mobile nav links - extra bold and visible */
     .nav-mobile .nav-link {
         font-size: 1.1rem;
@@ -376,7 +407,7 @@ p {
         display: block;
         border-bottom: 1px solid rgba(0,0,0,0.1);
     }
-    
+
     .nav-mobile .nav-link:hover,
     .nav-mobile .nav-link.active {
         background-color: var(--primary-green);

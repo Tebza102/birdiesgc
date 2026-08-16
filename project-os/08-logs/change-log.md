@@ -279,3 +279,41 @@ Pass for everything achievable without a live Supabase project or the real club 
 
 **Next action:**
 - A human should review and apply the corrected migration to the live Supabase project, re-run Supabase Security Advisor, then upload the actual latest workbook as Admin to acceptance-test the preview/commit. Do not merge to `main`.
+
+### 2026-08-16 18:30 — Mobile Responsive Golf Hub / Scorecard Fix
+
+**Changed by:** Claude, executing `project-os/10-prompts/claude-mobile-responsive-golf-hub.md` in response to `project-os/08-logs/mobile-responsive-review.md` (real-device screenshots)
+
+**Files changed:**
+- css/style.css
+- css/mvp.css
+- js/birdie-mvp.js
+- scripts/test-mobile-css.js (new)
+- .github/workflows/mvp-check.yml
+- project-os/00-start-here/current-status.md
+- project-os/00-start-here/next-action.md
+
+**Summary:**
+Fixed a mobile usability regression in the Events / Member Golf Hub found via real-device screenshots. Root causes and fixes: (1) `.container`'s mobile gutter (24px) was stacking with an additional `.member-golf-section`/`.mvp-panel`/`.mvp-day-detail` left/right padding (16px) — the second, redundant padding was removed and `.container` itself reduced to a single 16px mobile gutter, with card padding now reduced on all sides instead. (2) The fixed mobile header (80px logo, 25%-opacity white pill designed for a dark hero image) visually obscured the leaderboard/scorer while scrolling on non-hero pages — reduced to a 56px logo with a near-opaque, blurred background, `.nav-mobile`'s top offset adjusted to match, and the login button/hamburger bars re-themed for the lighter background; desktop header untouched. (3) The leaderboard's player-name cell inherited `white-space: nowrap` from a rule shared with the score grid, forcing the row (and table) wide — scoped a mobile-only `white-space: normal` override to just the leaderboard's name column. (4) The live score sheet was the critical failure: a forced desktop `min-width: 1320px` on `.mvp-score-grid` plus a 168px sticky player column and a 70px+ sticky Total column left almost no visible width for hole-entry cells inside the already-narrowed container. Removed the forced min-width (table now sizes to real content, still horizontally scrollable for remaining holes inside `.mvp-score-grid-wrap`), dropped the sticky Total column on mobile, and echo the live total inside the sticky player cell instead (new `.mvp-player-mobile-total` element, `data-mobile-total-for` attribute); `applyScoreGridLiveUpdate()` now updates both the desktop and mobile total echoes in place, preserving the existing no-rerender/no-focus-loss behaviour. Player column narrowed from 168px to 104px with wrapping enabled so names stay identifiable rather than clipping. (5) Individual scorecard grid tightened to fit without page-level overflow. Import/admin/calendar controls got padding touch-ups; their existing responsive patterns already prevented overflow.
+
+Added `scripts/test-mobile-css.js`: 15 framework-free checks that (a) statically confirm the specific CSS rules this fix depends on are present (so a future edit can't silently reintroduce the forced grid width, the stacked gutters, or an unreadable header), and (b) prove by arithmetic — using the real mobile player-column/input/padding values pulled directly out of the CSS — that at least 2 (in practice 3+) hole score cells fit beside the player identity at 320/360/375/390/400/430px, under a documented conservative gutter assumption. Wired into `.github/workflows/mvp-check.yml`.
+
+**Tests run:**
+- `node scripts/test-mobile-css.js`: 15/15 passing.
+- `node scripts/test-legacy-import.js`: 24/24 passing (unaffected by this change).
+- `node --check` on all shipped JS files: pass.
+- Secret scan (`service_role`/`sb_secret_`): no matches.
+- `npm run build`: pass.
+- Local dev-server smoke test: pass.
+- GitHub Actions `Birdie MVP Check`: green on both the branch push and PR #1.
+
+**Result:**
+Pass for everything achievable without a browser in this environment. **No browser/devtools automation or real device was available** — the fix was verified by reading the real computed CSS values and doing the same width arithmetic a human would do with devtools, plus static assertions that the fix's rules exist, not by an actual rendered check at any of the target widths. This is weaker evidence than a real screenshot and should be treated as such.
+
+**Risks remaining:**
+- No real-device or browser-rendered confirmation of the mobile layout at any width. A human should check on an actual phone at 320/360/375/390/430px before treating this as fully accepted, per the acceptance checklist in the correction brief.
+- The mobile header's new near-opaque blurred background is a visual change; a human should confirm it reads well against the actual brand imagery, not just contrast math.
+- Same pre-existing human-only blockers as prior entries: real-browser sign-in, second-account Realtime proof, Vercel preview link, Gate 2B migration review/apply + real-workbook acceptance.
+
+**Next action:**
+- A human should open the Events page on a real phone (or browser devtools at 320/360/375/390/430px) and confirm: no page-level horizontal scroll, the leaderboard and scorer are usable, at least two (ideally more) hole cells are visible beside the player identity while scoring, the mobile header no longer covers content while scrolling, and the individual scorecard/import/calendar controls fit. Do not merge to `main`.

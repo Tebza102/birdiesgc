@@ -381,7 +381,7 @@
                 const value = scoreFor(player.id, hole);
                 return `<td><input class="mvp-score-input" type="number" inputmode="numeric" min="1" max="30" value="${value}" data-player-id="${player.id}" data-hole="${hole}" aria-label="${escapeHtml(name)} hole ${hole}"></td>`;
             }).join('');
-            return `<tr><th class="mvp-player-sticky"><strong>${escapeHtml(name)}</strong><small>HC ${escapeHtml(player.handicap_at_start || '-')}</small></th>${cells}<td class="mvp-total-sticky" data-total-for="${player.id}"><strong>${total}</strong>${imported ? '<small>Excel</small>' : ''}</td></tr>`;
+            return `<tr><th class="mvp-player-sticky"><strong>${escapeHtml(name)}</strong><small>HC ${escapeHtml(player.handicap_at_start || '-')}</small><span class="mvp-player-mobile-total" data-mobile-total-for="${player.id}">Total <strong>${total}</strong></span></th>${cells}<td class="mvp-total-sticky" data-total-for="${player.id}"><strong>${total}</strong>${imported ? '<small>Excel</small>' : ''}</td></tr>`;
         }).join('');
 
         return `
@@ -433,6 +433,8 @@
             const total = leaderboard && leaderboard.total_score != null ? leaderboard.total_score : '-';
             const totalCell = document.querySelector('[data-total-for="' + player.id + '"] strong');
             if (totalCell) totalCell.textContent = total;
+            const mobileTotalCell = document.querySelector('[data-mobile-total-for="' + player.id + '"] strong');
+            if (mobileTotalCell) mobileTotalCell.textContent = total;
 
             if (player.score_source === 'imported_total' || !day) return;
             for (let hole = 1; hole <= day.hole_count; hole += 1) {

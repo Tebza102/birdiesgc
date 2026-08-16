@@ -51,6 +51,9 @@ jobs:
       - name: Legacy workbook import unit tests
         run: node scripts/test-legacy-import.js
 
+      - name: Mobile Golf Hub CSS regression checks
+        run: node scripts/test-mobile-css.js
+
       - name: Local server smoke test
         shell: bash
         run: |

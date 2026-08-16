@@ -411,6 +411,10 @@
     white-space: nowrap;
 }
 
+.mvp-player-mobile-total {
+    display: none;
+}
+
 .mvp-leaderboard-table th,
 .mvp-score-grid thead th {
     background: var(--primary-green);
@@ -682,11 +686,39 @@
 }
 
 @media (max-width: 640px) {
-    .member-golf-section,
+    /* .container already carries the mobile gutter (see style.css); no
+       extra left/right padding here, or the two stack into an oversized
+       nested margin that was eating most of the usable width. Card
+       padding is still reduced, just on all sides, not just left/right. */
+    .member-golf-section {
+        padding: var(--spacing-lg) 0;
+    }
+
     .mvp-day-detail,
-    .mvp-panel {
-        padding-left: var(--spacing-sm);
-        padding-right: var(--spacing-sm);
+    .mvp-panel,
+    .mvp-import-panel {
+        padding: var(--spacing-sm);
+        border-radius: var(--radius-md);
+    }
+
+    .mvp-loading,
+    .mvp-empty,
+    .mvp-state-card,
+    .mvp-login-card {
+        padding: var(--spacing-sm);
+    }
+
+    .mvp-hub-grid {
+        gap: var(--spacing-sm);
+    }
+
+    .mvp-panel-heading {
+        margin-bottom: var(--spacing-sm);
+    }
+
+    .mvp-leaderboard,
+    .mvp-score-entry {
+        margin-top: var(--spacing-sm);
     }
 
     .mvp-login-card,
@@ -723,21 +755,82 @@
     }
 
     .mvp-mini-scorecard {
-        grid-template-columns: repeat(6, minmax(52px, 1fr));
+        grid-template-columns: repeat(6, minmax(44px, 1fr));
+        gap: 0.3rem;
     }
 
-    .mvp-score-input {
-        width: 52px;
-        height: 46px;
+    .mvp-mini-scorecard > div {
+        min-width: 44px;
+        padding: 0.4rem 0.2rem;
+    }
+
+    /* Leaderboard: let the player name wrap instead of forcing the row
+       (and therefore the whole table) wide enough to hold it on one line.
+       Scoped to the leaderboard only — the score grid keeps nowrap, its
+       cells are single inputs that don't need to wrap. */
+    .mvp-leaderboard-table th,
+    .mvp-leaderboard-table td {
+        padding: 0.5rem 0.4rem;
+        font-size: 0.82rem;
+    }
+
+    .mvp-leaderboard-table td:nth-child(2),
+    .mvp-leaderboard-table th:nth-child(2) {
+        white-space: normal;
+        max-width: 38vw;
+    }
+
+    .mvp-link-button {
+        font-size: 0.7rem;
+        white-space: nowrap;
+    }
+
+    /* Live Score Sheet: the forced desktop min-width and the sticky Total
+       column together left almost no room for hole cells on a phone. The
+       grid now sizes to its real content (still horizontally scrollable
+       for the remaining holes inside .mvp-score-grid-wrap), the Total
+       column is dropped in favour of a total already echoed inside the
+       sticky player cell, and the player column is narrow enough to leave
+       most of the viewport for hole inputs. */
+    .mvp-score-grid {
+        min-width: 0;
     }
 
     .mvp-score-grid th,
     .mvp-score-grid td {
-        padding: 0.4rem 0.3rem;
+        padding: 0.3rem 0.25rem;
     }
 
     .mvp-player-sticky {
-        min-width: 168px;
-        max-width: 168px;
+        min-width: 104px;
+        max-width: 104px;
+        white-space: normal;
+    }
+
+    .mvp-player-sticky strong {
+        font-size: 0.82rem;
+        line-height: 1.15;
+    }
+
+    .mvp-player-mobile-total {
+        display: block;
+        margin-top: 0.2rem;
+        font-size: 0.7rem;
+        font-weight: 800;
+        color: var(--accent-gold);
+    }
+
+    .mvp-score-grid thead .mvp-player-mobile-total {
+        color: rgba(255, 255, 255, 0.85);
+    }
+
+    .mvp-total-sticky {
+        display: none;
+    }
+
+    .mvp-score-input {
+        width: 44px;
+        height: 44px;
+        font-size: 0.92rem;
     }
 }

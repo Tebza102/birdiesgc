@@ -1,12 +1,13 @@
 # Next Action
 
 ## Current Objective
-Complete real-browser/device validation of the live scorer and the new Excel workbook import using the private acceptance-test golf day and the club's actual latest workbook.
+Complete real-browser/device validation of the live scorer, the mobile layout fix, and the new Excel workbook import using the private acceptance-test golf day and the club's actual latest workbook.
 
 ## Gate Status
 - Gate 1 — Backend/database/RLS/spreadsheet validation: **COMPLETE**.
 - Gate 2 — Auth/calendar/scorer/digital scorecard/live leaderboard: **ENGINEERING COMPLETE; REAL-BROWSER/DEVICE VALIDATION IN PROGRESS**.
 - Gate 2B — Admin Excel workbook upload/import for legacy continuity and backup: **CORRECTED AGAINST THE REAL WORKBOOK (preview, safe null-date-tolerant matching, atomic admin-gated RPC, audit trail, 24 passing unit tests, ordinary hub no longer depends on the migration); MIGRATION NOT YET APPLIED LIVE, THEN NEEDS REAL-WORKBOOK ACCEPTANCE**.
+- Gate 2C — Mobile responsiveness of the Events / Member Golf Hub: **FIXED (CSS-only + a small player-cell total echo); VERIFIED BY STATIC REGRESSION CHECKS AND ARITHMETIC ONLY — NEEDS A REAL PHONE**.
 - Gate 3 — Private chairman/member preview: **NOT STARTED** (needs a Vercel project link).
 
 ## Private Acceptance-Test Golf Day
@@ -25,7 +26,7 @@ This record is disposable acceptance-test data and must not be treated as a real
 1. Refresh/open the Events page while signed in as the approved Admin and select `MVP Live Score Test - 16 Aug 2026`.
 2. Start the live round.
 3. Enter a few hole scores through the Excel-familiar scorer grid and confirm totals/positions update without losing scorer focus/scroll position.
-4. Repeat on a phone/device and confirm the grid is usable with the enlarged tap targets.
+4. Repeat on a phone/device (ideally 320/360/375/390/430px) and confirm the rebuilt mobile scorer grid shows the player identity plus multiple hole inputs without zooming, the leaderboard is readable, and the mobile header no longer covers content while scrolling — see "Gate 2C" above; this has only been checked by CSS arithmetic and static regression tests so far, never a real device.
 5. Optional but required before final Gate 2 sign-off: bootstrap a second approved `member` account and verify it can watch the leaderboard but cannot write scores, and that Realtime updates a second session without reload.
 6. After live-scorer acceptance passes, implement the locked Excel upload/import requirement described below.
 7. Link a Vercel project for this repo to get a shareable private preview URL.
