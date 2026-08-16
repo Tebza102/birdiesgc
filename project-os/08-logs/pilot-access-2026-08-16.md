@@ -27,5 +27,10 @@ The live Supabase project was checked after account creation and showed exactly 
 - The repository migration was corrected for hosted Supabase by removing an unnecessary attempt to alter ownership-controlled `storage.objects` RLS state.
 - The legacy workbook `SECURITY DEFINER` RPC no longer grants EXECUTE to `anon`/`public`; authenticated access remains and the function's internal approved-admin check remains authoritative.
 
+## Security advisor status
+- Anonymous execution warning for `import_legacy_workbook` was cleared by revoking `anon`/`public` EXECUTE.
+- The remaining authenticated SECURITY DEFINER warning is expected because signed-in admins use this RPC and it performs its own server-side approved-admin check.
+- Supabase leaked-password protection is still disabled and should be enabled before broader membership rollout if the project plan supports it.
+
 ## Deployment note
 A separate Vercel pilot project `birdiesgc-pilot` was created and linked to this GitHub repository so the existing production site at `www.birdiesgc.co.za` is not overwritten during pilot testing. The final publish from the linked authenticated checkout still requires `vercel --prod --yes` to be executed successfully. Do not treat the pilot URL as live until that deployment is confirmed.
