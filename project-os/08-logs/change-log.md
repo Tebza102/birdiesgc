@@ -170,3 +170,32 @@ Pass for all checks achievable without a browser + real password or Supabase Aut
 
 **Next action:**
 - A human should sign in on the Events page with the pilot account, run create-day → add-player → score-entry → leaderboard end to end, check the scorer grid on an actual phone, and link a Vercel project if a preview link is wanted before review.
+
+### 2026-08-16 09:59 — Independent Review Fixes (PR #1)
+
+**Changed by:** Claude, responding to an independent review comment on PR #1
+
+**Files changed:**
+- js/birdie-mvp.js
+- js/main.js
+- css/mvp.css
+- project-os/08-logs/change-log.md
+
+**Summary:**
+Fixed three findings from an independent review on PR #1. (1) HIGH: `saveScore()` and the `hole_scores` Realtime handler both triggered a full `openGolfDay()` re-render, resetting scroll position, focus and the visible `is-saved` state on the mobile score grid on every save. Added `refreshCurrentDayLite()`, which reloads leaderboard/score data and updates only the leaderboard section and the score grid's total cells / non-focused input values in place; `golf_day_players`/`golf_days` Realtime changes still get a full re-render since those are rarer staff actions that change surrounding controls. (2) MEDIUM: `BirdieAuth.loadProfile()` didn't select `approved`, so a signed-in-but-unapproved account was labelled a plain "Member" and then hit a generic load failure. Now selects `approved`, fails closed if the row is missing/unreadable, shows "Pending Approval" in the header, and renders a dedicated "awaiting club approval" state before attempting any member-data load. (3) MEDIUM: the Realtime channel subscribed without a status/error callback. Added one that logs `SUBSCRIBED`/`CHANNEL_ERROR`/`TIMED_OUT`/`CLOSED` and shows a small "Live updates unavailable" badge on failure. No scope, architecture, or database/RLS changes.
+
+**Tests run:**
+- `node --check` on all shipped JS files: pass.
+- Secret scan (`service_role`/`sb_secret_`): no matches.
+- `npm run build`: pass.
+- Local dev-server smoke test (same checks as CI): pass.
+- GitHub Actions `Birdie MVP Check`: green on both the branch push and PR #1.
+
+**Result:**
+Pass. All three review findings resolved; PR #1 updated with the fix summary and re-confirmed ready for review (not merged).
+
+**Risks remaining:**
+- Same human-only blockers as the prior entry: real-browser sign-in, phone-device check, second-account Realtime proof, and Vercel preview link.
+
+**Next action:**
+- Await human review/acceptance testing on PR #1. Do not merge to `main`.
