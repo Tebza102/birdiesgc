@@ -46,7 +46,9 @@ on conflict (id) do update set
   file_size_limit = excluded.file_size_limit,
   allowed_mime_types = excluded.allowed_mime_types;
 
-alter table storage.objects enable row level security;
+-- storage.objects already has RLS enabled and is owned by Supabase's storage
+-- service in hosted projects. Do not ALTER that table here; project migrations
+-- only define the policies needed for this bucket.
 
 drop policy if exists event_posters_public_read on storage.objects;
 create policy event_posters_public_read
