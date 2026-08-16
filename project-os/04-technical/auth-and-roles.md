@@ -1,7 +1,7 @@
 # Auth and Roles
 
 ## Auth Provider
-Supabase Auth with email/password for the pilot. The existing hard-coded credentials in `js/main.js` are prototype-only and must be removed before production merge.
+Supabase Auth with email/password for the pilot. The hard-coded credentials that previously lived in `js/main.js` have been removed; Supabase Auth is the only functioning login path anywhere on the site.
 
 ## Identity Model
 Not every golfer needs a website login.
@@ -50,10 +50,8 @@ Existing public website pages remain public. Only explicitly published golf-day/
 6. Supabase RLS independently evaluates every read/write.
 7. Logout uses Supabase Auth and removes the session.
 
-## Current Events-Page Compatibility Bridge
-The shared legacy `js/main.js` still creates the original login modal and hard-coded prototype listeners. To minimise risk while Gate 2 is validated, `js/birdie-mvp.js` loads before `js/main.js` on `events.html` and registers capture-phase login/form handlers. It removes the legacy localStorage session and intercepts login/logout on the Events page before the old handler can authenticate hard-coded credentials.
-
-This is an interim migration technique, not the final production auth architecture. Before production merge, the hard-coded credential implementation must be removed from shared `js/main.js` so all pages use one real auth source.
+## Shared Auth Bridge (Site-Wide)
+`js/main.js` defines `window.BirdieAuth`, a single Supabase Auth client/session/profile manager, and creates the Login/Logout UI on every page. `js/birdie-mvp.js` (Events-only) and `js/birdie-public-events.js` (Events-only, anonymous) both consume `window.BirdieAuth` instead of creating their own Supabase clients or intercepting DOM events. `events.html` loads `js/main.js` before the Events-specific scripts so `window.BirdieAuth` exists before they run. There is no longer a capture-phase interception workaround.
 
 ## Role Enforcement
 - Do not authorise through `birdiesgc_auth_session`.
@@ -73,8 +71,7 @@ Create only the few accounts needed for the pilot:
 Accounts can be approved/assigned roles through controlled database administration during the pilot. Do not build a full user-management dashboard until actual club usage justifies it.
 
 ## Auth Risks
-- Hard-coded prototype credentials remain elsewhere in shared `js/main.js` until the final auth cleanup.
-- End-to-end RLS still requires testing with real approved and unapproved users.
+- End-to-end RLS still requires testing with real approved and unapproved users in an actual browser.
 - Static pages cannot be considered protected merely because links are hidden.
 - Role changes may require session/data refresh before UI state reflects them.
 - Open Auth signup must never equal automatic club access; the `approved` gate exists specifically to prevent this.

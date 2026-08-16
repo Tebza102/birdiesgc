@@ -1,24 +1,20 @@
 # Next Action
 
 ## Current Objective
-Finish Gate 2 by validating the already-built Supabase-backed Events/member golf workflow with real approved users, without expanding scope.
+All safely-automatable engineering work for Gate 2 is finished. What remains is human browser/device validation with the real pilot account, plus optional preview/second-account setup.
 
 ## Gate Status
 - Gate 1 — Backend/database/RLS/spreadsheet validation: **COMPLETE**.
-- Gate 2 — Auth/calendar/scorer/digital scorecard/live leaderboard: **IMPLEMENTED ON FEATURE BRANCH; REAL-USER VALIDATION REQUIRED**.
-- Gate 3 — Private chairman/member preview: **NOT STARTED**.
+- Gate 2 — Auth/calendar/scorer/digital scorecard/live leaderboard: **ENGINEERING COMPLETE; REAL-BROWSER/DEVICE VALIDATION REQUIRED FROM A HUMAN**.
+- Gate 3 — Private chairman/member preview: **NOT STARTED** (needs a Vercel project link).
 
 ## Immediate Next Actions
-1. Bootstrap one real Supabase Auth pilot account using an email address supplied/approved by the user.
-2. Mark that profile `approved = true` and assign `admin`, `management`, or `scorer` as appropriate using controlled database administration — never browser-editable metadata.
-3. Sign in on the Events page and verify the member hub loads the imported Game 15 leaderboard.
-4. Create one throwaway live golf day from the UI and add a few imported roster players.
-5. Enter hole scores through the Excel-familiar scorer grid and confirm totals/positions.
-6. Bootstrap a second approved `member` account and verify it can watch the leaderboard but cannot write scores.
-7. Verify Realtime updates in two independent sessions.
-8. Remove/replace the legacy hard-coded auth implementation from shared `js/main.js` before any production merge.
-9. Re-run Supabase Security Advisor after any auth/RLS changes.
-10. Prepare a private preview only after the above passes.
+1. Sign in on the Events page with `apprigate@gmail.com` and verify the member hub loads the imported Game 15 leaderboard.
+2. Create one throwaway live golf day from the UI and add a few imported roster players.
+3. Enter hole scores through the Excel-familiar scorer grid on a phone and confirm totals/positions update and tap targets feel comfortable.
+4. Optional: bootstrap a second approved `member` account (controlled database administration, never browser-editable metadata) and verify it can watch the leaderboard but cannot write scores, and that Realtime updates a second session without reload.
+5. Link a Vercel project for this repo (dashboard connect, or `vercel link` from an authenticated CLI) to get a shareable preview URL.
+6. Re-run Supabase Security Advisor only if a future change touches auth/RLS — no schema/RLS changes were made in this pass.
 
 ## User Input Policy
 Do not ask the user to create tables, copy SQL, understand Supabase internals, or manage roles manually. Ask only for the smallest information that cannot safely be inferred or generated — currently the email address(es) to use for real pilot Auth accounts.

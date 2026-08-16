@@ -1,11 +1,9 @@
 // Birdie Squad Golf Club - public Supabase golf-day list.
 // Anonymous visitors see only rows explicitly marked public by RLS.
+// Reuses the shared window.BirdieAuth Supabase client (js/main.js) so the
+// page never creates more than one GoTrueClient instance.
 (function () {
     'use strict';
-
-    const SUPABASE_URL = 'https://ydrrhlpvblwgwboyuwkj.supabase.co';
-    const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_yDJdqAZLFId-tTzyIIJTQQ_kG_IOFqG';
-    const SUPABASE_MODULE_URL = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/+esm';
 
     function escapeHtml(value) {
         return String(value == null ? '' : value)
@@ -66,10 +64,7 @@
 
     async function loadPublicGolfDays() {
         try {
-            const module = await import(SUPABASE_MODULE_URL);
-            const client = module.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-                auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
-            });
+            const client = await window.BirdieAuth.ensureClient();
             const today = todayInSouthAfrica();
             const result = await client
                 .from('golf_days')

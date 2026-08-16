@@ -465,11 +465,12 @@
 
 .mvp-score-input {
     width: 48px;
-    height: 38px;
+    height: 44px;
     border: 1px solid #cfd8cf;
     border-radius: 6px;
     text-align: center;
     font: inherit;
+    font-size: 1rem;
     font-weight: 700;
     background: var(--bg-white);
 }
@@ -637,5 +638,20 @@
 
     .mvp-mini-scorecard {
         grid-template-columns: repeat(6, minmax(52px, 1fr));
+    }
+
+    .mvp-score-input {
+        width: 52px;
+        height: 46px;
+    }
+
+    .mvp-score-grid th,
+    .mvp-score-grid td {
+        padding: 0.4rem 0.3rem;
+    }
+
+    .mvp-player-sticky {
+        min-width: 168px;
+        max-width: 168px;
     }
 }

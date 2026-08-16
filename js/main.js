@@ -1,32 +1,129 @@
 // Birdie Squad Golf Club - Main JavaScript
 
-document.addEventListener('DOMContentLoaded', function() {
-    // Simple role-based auth for static site
-    const AUTH_STORAGE_KEY = 'birdiesgc_auth_session';
-    const credentials = [
-        { username: 'admin', password: 'BirdieAdmin2026!', role: 'admin', label: 'Admin/Management' },
-        { username: 'management', password: 'BirdieMgmt2026!', role: 'management', label: 'Admin/Management' },
-        { username: 'member', password: 'BirdieMember2026!', role: 'member', label: 'Member' }
-    ];
+// Shared Supabase Auth bridge. Loaded on every page so there is exactly one
+// real login authority for the whole site. Role/approval data is read from
+// `user_profiles` (RLS-governed); nothing here is browser-editable authority.
+const BirdieAuth = (function () {
+    const SUPABASE_URL = 'https://ydrrhlpvblwgwboyuwkj.supabase.co';
+    const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_yDJdqAZLFId-tTzyIIJTQQ_kG_IOFqG';
+    const SUPABASE_MODULE_URL = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/+esm';
+    const LEGACY_AUTH_STORAGE_KEY = 'birdiesgc_auth_session';
 
+    try {
+        localStorage.removeItem(LEGACY_AUTH_STORAGE_KEY);
+    } catch (error) {
+        // Storage can be unavailable in strict privacy modes.
+    }
+
+    const state = { client: null, clientPromise: null, session: null, profile: null };
+    const listeners = [];
+
+    function ensureClient() {
+        if (state.client) return Promise.resolve(state.client);
+        if (state.clientPromise) return state.clientPromise;
+
+        state.clientPromise = import(SUPABASE_MODULE_URL)
+            .then(function (module) {
+                state.client = module.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+                    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+                });
+                state.client.auth.onAuthStateChange(function () {
+                    window.setTimeout(refresh, 0);
+                });
+                return state.client;
+            })
+            .catch(function (error) {
+                state.clientPromise = null;
+                throw error;
+            });
+
+        return state.clientPromise;
+    }
+
+    async function loadProfile(user) {
+        if (!user) {
+            state.profile = null;
+            return null;
+        }
+        const client = await ensureClient();
+        const result = await client.from('user_profiles').select('role, member_id').eq('id', user.id).maybeSingle();
+        if (result.error) {
+            console.error('Birdie Auth profile load failed:', result.error);
+            state.profile = { role: 'member', member_id: null };
+            return state.profile;
+        }
+        state.profile = result.data || { role: 'member', member_id: null };
+        return state.profile;
+    }
+
+    function notify() {
+        const detail = { session: state.session, profile: state.profile };
+        listeners.forEach(function (fn) {
+            try {
+                fn(detail);
+            } catch (error) {
+                console.error('Birdie Auth listener failed:', error);
+            }
+        });
+        document.dispatchEvent(new CustomEvent('birdie-auth-changed', { detail: detail }));
+    }
+
+    async function refresh() {
+        try {
+            const client = await ensureClient();
+            const result = await client.auth.getSession();
+            state.session = result.data && result.data.session ? result.data.session : null;
+            await loadProfile(state.session ? state.session.user : null);
+        } catch (error) {
+            console.error('Birdie Auth session refresh failed:', error);
+            state.session = null;
+            state.profile = null;
+        }
+        notify();
+    }
+
+    async function signIn(email, password) {
+        const client = await ensureClient();
+        const result = await client.auth.signInWithPassword({ email: email, password: password });
+        if (result.error) throw result.error;
+        state.session = result.data.session;
+        await loadProfile(result.data.user);
+        notify();
+        return state.session;
+    }
+
+    async function signOut() {
+        const client = await ensureClient();
+        await client.auth.signOut();
+        state.session = null;
+        state.profile = null;
+        notify();
+    }
+
+    function onChange(fn) {
+        listeners.push(fn);
+    }
+
+    return {
+        ensureClient: ensureClient,
+        refresh: refresh,
+        signIn: signIn,
+        signOut: signOut,
+        onChange: onChange,
+        getSession: function () { return state.session; },
+        getProfile: function () { return state.profile; }
+    };
+})();
+
+window.BirdieAuth = BirdieAuth;
+
+document.addEventListener('DOMContentLoaded', function() {
     const headerCta = document.querySelector('.header-cta');
     const mobileNavList = document.querySelector('.nav-mobile .nav-list');
 
-    function getSession() {
-        try {
-            const session = JSON.parse(localStorage.getItem(AUTH_STORAGE_KEY) || 'null');
-            return session && session.role ? session : null;
-        } catch (error) {
-            return null;
-        }
-    }
-
-    function setSession(session) {
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
-    }
-
-    function clearSession() {
-        localStorage.removeItem(AUTH_STORAGE_KEY);
+    function roleLabel(role) {
+        const labels = { admin: 'Admin', management: 'Management', scorer: 'Scorer', member: 'Member' };
+        return labels[role] || 'Member';
     }
 
     function openLoginModal() {
@@ -48,6 +145,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function routeByRole(role) {
+        // The Events page renders its member hub in place; do not navigate away from it.
+        if (isEventsPage()) return;
         if (role === 'admin' || role === 'management') {
             window.location.href = 'governance.html';
             return;
@@ -56,7 +155,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function updateAuthButtons() {
-        const session = getSession();
+        const session = BirdieAuth.getSession();
+        const profile = BirdieAuth.getProfile();
         const desktopBtn = document.getElementById('login-trigger');
         const mobileBtn = document.getElementById('login-trigger-mobile');
         const roleTag = document.getElementById('auth-role-tag');
@@ -66,7 +166,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (session) {
             desktopBtn.textContent = 'Logout';
             mobileBtn.textContent = 'Logout';
-            roleTag.textContent = session.label;
+            roleTag.textContent = roleLabel(profile ? profile.role : 'member');
             roleTag.classList.add('active');
         } else {
             desktopBtn.textContent = 'Login';
@@ -77,10 +177,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function handleAuthButtonClick() {
-        const session = getSession();
-        if (session) {
-            clearSession();
-            updateAuthButtons();
+        if (BirdieAuth.getSession()) {
+            BirdieAuth.signOut().catch(function (error) {
+                console.error('Birdie logout failed:', error);
+            });
             return;
         }
         openLoginModal();
@@ -121,10 +221,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="auth-modal-panel" role="dialog" aria-modal="true" aria-labelledby="auth-title">
                     <button type="button" class="auth-close" id="auth-close" aria-label="Close login">&times;</button>
                     <h3 id="auth-title">Member Login</h3>
-                    <p class="auth-subtitle">Use your assigned credentials to access your role area.</p>
+                    <p class="auth-subtitle">Use your Birdie Squad email and password.</p>
                     <form id="auth-form">
-                        <label for="auth-username">Username</label>
-                        <input id="auth-username" name="username" type="text" required autocomplete="username">
+                        <label for="auth-username">Email</label>
+                        <input id="auth-username" name="email" type="email" required autocomplete="email" placeholder="name@example.com">
                         <label for="auth-password">Password</label>
                         <input id="auth-password" name="password" type="password" required autocomplete="current-password">
                         <p class="auth-error" aria-live="polite"></p>
@@ -177,26 +277,39 @@ document.addEventListener('DOMContentLoaded', function() {
         if (form) {
             form.addEventListener('submit', function(event) {
                 event.preventDefault();
-                const username = (form.username.value || '').trim().toLowerCase();
+                const email = (form.email.value || '').trim();
                 const password = form.password.value || '';
                 const error = form.querySelector('.auth-error');
-                const matched = credentials.find(
-                    (account) => account.username === username && account.password === password
-                );
+                const submitBtn = form.querySelector('.auth-submit');
 
-                if (!matched) {
-                    if (error) error.textContent = 'Invalid username or password.';
+                if (error) error.textContent = '';
+                if (!email || !password) {
+                    if (error) error.textContent = 'Enter your email and password.';
                     return;
                 }
 
-                setSession({
-                    username: matched.username,
-                    role: matched.role,
-                    label: matched.label
-                });
-                updateAuthButtons();
-                closeLoginModal();
-                routeByRole(matched.role);
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = 'Signing in...';
+                }
+
+                BirdieAuth.signIn(email, password)
+                    .then(function () {
+                        updateAuthButtons();
+                        closeLoginModal();
+                        const profile = BirdieAuth.getProfile();
+                        routeByRole(profile ? profile.role : 'member');
+                    })
+                    .catch(function (signInError) {
+                        console.error('Birdie login failed:', signInError);
+                        if (error) error.textContent = 'Login failed. Check your email and password.';
+                    })
+                    .finally(function () {
+                        if (submitBtn) {
+                            submitBtn.disabled = false;
+                            submitBtn.textContent = 'Sign In';
+                        }
+                    });
             });
         }
     }
@@ -204,6 +317,8 @@ document.addEventListener('DOMContentLoaded', function() {
     createAuthUi();
     bindAuthEvents();
     updateAuthButtons();
+    BirdieAuth.onChange(updateAuthButtons);
+    BirdieAuth.refresh();
 
     function ensureEventsNavLinks() {
         const navLists = document.querySelectorAll('.nav .nav-list');

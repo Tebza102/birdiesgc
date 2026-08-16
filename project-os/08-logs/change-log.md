@@ -137,3 +137,36 @@ Pass for Gate 1. Gate 2 implementation is ready for real authenticated browser v
 
 **Next action:**
 - Bootstrap one approved staff account and one approved member account, run the two-session scoring test, then remove legacy shared auth before preparing the private chairman preview.
+
+### 2026-08-16 09:00 — Site-Wide Legacy Auth Removal + Finishing Pass
+
+**Changed by:** Claude (finishing brief `project-os/10-prompts/claude-finish-birdie-mvp.md`)
+
+**Files changed:**
+- js/main.js
+- js/birdie-mvp.js
+- js/birdie-public-events.js
+- events.html
+- css/mvp.css
+- .github/workflows/mvp-check.yml
+- project-os/00-start-here/current-status.md
+- project-os/00-start-here/next-action.md
+
+**Summary:**
+Removed the hard-coded `admin`/`management`/`member` username+password array and the `birdiesgc_auth_session` localStorage session — the last functioning insecure login path, previously still live on every page except Events. Replaced it with a single shared Supabase Auth bridge (`window.BirdieAuth`) in `js/main.js`, loaded on every page, so Login/Logout is one real code path everywhere. `js/birdie-mvp.js` no longer creates its own Supabase client or intercepts clicks in the capture phase; it now consumes `window.BirdieAuth` for session/profile/client and only renders golf-day data. `js/birdie-public-events.js` reuses the same shared client instead of instantiating a second one. Reordered `events.html` script tags (`main.js` before `birdie-mvp.js`/`birdie-public-events.js`) since the interception workaround is gone. Enlarged score-input tap targets (44–46px) and tightened the sticky player column on narrow viewports for phone scorer usability. Updated the CI smoke test to check the publishable key in its new location (`js/main.js`) and `BirdieAuth` usage in `js/birdie-mvp.js`. No database/schema/RLS changes were made.
+
+**Tests run:**
+- `node --check` on all shipped JS files (`js/*.js`, `scripts/*.js`): pass.
+- Secret scan (`grep -RIn -E 'service_role|sb_secret_'` over shipped `.html`/`.js`/`.css`): no matches.
+- `npm run build`: pass (no-op static build).
+- Local dev-server smoke test replicating the CI workflow (`/events`, `js/main.js`, `js/birdie-mvp.js`, `js/birdie-public-events.js` all served; required strings present in each): pass.
+
+**Result:**
+Pass for all checks achievable without a browser + real password or Supabase Auth administration access.
+
+**Risks remaining:**
+- Real-browser sign-in with `apprigate@gmail.com`, phone-device scorer feel, and two-session Realtime have not been re-verified in this pass — they require a human with the pilot password/device or Supabase Auth admin access, none of which are available in this environment. The prior database-level RLS proof (2026-08-15) still stands since no schema/RLS/policy changes were made.
+- No Vercel project is linked in this workspace, so no preview URL exists yet.
+
+**Next action:**
+- A human should sign in on the Events page with the pilot account, run create-day → add-player → score-entry → leaderboard end to end, check the scorer grid on an actual phone, and link a Vercel project if a preview link is wanted before review.
