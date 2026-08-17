@@ -1,40 +1,322 @@
 // Birdie Squad Golf Club - Main JavaScript
 
-document.addEventListener('DOMContentLoaded', function() {
-    // Simple role-based auth for static site
-    const AUTH_STORAGE_KEY = 'birdiesgc_auth_session';
-    const credentials = [
-        { username: 'admin', password: 'BirdieAdmin2026!', role: 'admin', label: 'Admin/Management' },
-        { username: 'management', password: 'BirdieMgmt2026!', role: 'management', label: 'Admin/Management' },
-        { username: 'member', password: 'BirdieMember2026!', role: 'member', label: 'Member' }
+// Shared Supabase Auth bridge. Loaded on every page so there is exactly one
+// real login authority for the whole site. Role/approval data is read from
+// `user_profiles` (RLS-governed); nothing here is browser-editable authority.
+const BirdieAuth = (function () {
+    const SUPABASE_URL = 'https://ydrrhlpvblwgwboyuwkj.supabase.co';
+    const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_yDJdqAZLFId-tTzyIIJTQQ_kG_IOFqG';
+    // Same pinned version from two independent, reputable ESM CDNs. A stalled
+    // or blocked jsDelivr request must not make the whole login flow look
+    // unresponsive — try it first, then fall back to esm.sh before giving up
+    // with a message the user can actually act on.
+    const SUPABASE_MODULE_URLS = [
+        'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/+esm',
+        'https://esm.sh/@supabase/supabase-js@2.111.0'
     ];
+    const MODULE_LOAD_TIMEOUT_MS = 10000;
+    const LEGACY_AUTH_STORAGE_KEY = 'birdiesgc_auth_session';
 
+    try {
+        localStorage.removeItem(LEGACY_AUTH_STORAGE_KEY);
+    } catch (error) {
+        // Storage can be unavailable in strict privacy modes.
+    }
+
+    const state = { client: null, clientPromise: null, session: null, profile: null };
+    const listeners = [];
+    const recoveryListeners = [];
+
+    // Dynamic import() has no abort mechanism, so a "timeout" here means
+    // "stop waiting and move on" rather than truly cancelling the network
+    // request — a late resolution after we've already tried the next CDN
+    // (or given up) is simply ignored.
+    function importWithTimeout(url, timeoutMs) {
+        return new Promise(function (resolve, reject) {
+            let settled = false;
+            const timer = window.setTimeout(function () {
+                if (settled) return;
+                settled = true;
+                reject(new Error('Timed out loading ' + url));
+            }, timeoutMs);
+            import(url).then(
+                function (module) {
+                    if (settled) return;
+                    settled = true;
+                    window.clearTimeout(timer);
+                    resolve(module);
+                },
+                function (error) {
+                    if (settled) return;
+                    settled = true;
+                    window.clearTimeout(timer);
+                    reject(error);
+                }
+            );
+        });
+    }
+
+    async function loadSupabaseModule() {
+        let lastError = null;
+        for (let i = 0; i < SUPABASE_MODULE_URLS.length; i += 1) {
+            try {
+                return await importWithTimeout(SUPABASE_MODULE_URLS[i], MODULE_LOAD_TIMEOUT_MS);
+            } catch (error) {
+                console.error('Birdie Auth: could not load the Supabase client from', SUPABASE_MODULE_URLS[i], error);
+                lastError = error;
+            }
+        }
+        console.error('Birdie Auth: all Supabase CDN sources failed.', lastError);
+        throw new Error('Login service could not load. Check your connection and try again.');
+    }
+
+    function ensureClient() {
+        if (state.client) return Promise.resolve(state.client);
+        if (state.clientPromise) return state.clientPromise;
+
+        state.clientPromise = loadSupabaseModule()
+            .then(function (module) {
+                state.client = module.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+                    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+                });
+                state.client.auth.onAuthStateChange(function (event, session) {
+                    if (event === 'PASSWORD_RECOVERY') {
+                        recoveryListeners.forEach(function (fn) {
+                            try {
+                                fn(session);
+                            } catch (error) {
+                                console.error('Birdie Auth recovery listener failed:', error);
+                            }
+                        });
+                    }
+                    window.setTimeout(refresh, 0);
+                });
+                return state.client;
+            })
+            .catch(function (error) {
+                state.clientPromise = null;
+                throw error;
+            });
+
+        return state.clientPromise;
+    }
+
+    async function loadProfile(user) {
+        if (!user) {
+            state.profile = null;
+            return null;
+        }
+        const client = await ensureClient();
+        const result = await client.from('user_profiles').select('role, member_id, approved').eq('id', user.id).maybeSingle();
+        if (result.error) {
+            console.error('Birdie Auth profile load failed:', result.error);
+            // Fail closed: an unreadable profile is treated as not approved,
+            // matching RLS's own default (new accounts start unapproved).
+            state.profile = { role: 'member', member_id: null, approved: false };
+            return state.profile;
+        }
+        state.profile = result.data || { role: 'member', member_id: null, approved: false };
+        return state.profile;
+    }
+
+    function notify() {
+        const detail = { session: state.session, profile: state.profile };
+        listeners.forEach(function (fn) {
+            try {
+                fn(detail);
+            } catch (error) {
+                console.error('Birdie Auth listener failed:', error);
+            }
+        });
+        document.dispatchEvent(new CustomEvent('birdie-auth-changed', { detail: detail }));
+    }
+
+    async function refresh() {
+        try {
+            const client = await ensureClient();
+            const result = await client.auth.getSession();
+            state.session = result.data && result.data.session ? result.data.session : null;
+            await loadProfile(state.session ? state.session.user : null);
+        } catch (error) {
+            console.error('Birdie Auth session refresh failed:', error);
+            state.session = null;
+            state.profile = null;
+        }
+        notify();
+    }
+
+    async function signIn(email, password) {
+        const client = await ensureClient();
+        const result = await client.auth.signInWithPassword({ email: email, password: password });
+        if (result.error) throw result.error;
+        state.session = result.data.session;
+        await loadProfile(result.data.user);
+        notify();
+        return state.session;
+    }
+
+    async function signOut() {
+        const client = await ensureClient();
+        await client.auth.signOut();
+        state.session = null;
+        state.profile = null;
+        notify();
+    }
+
+    async function resetPasswordForEmail(email, redirectTo) {
+        const client = await ensureClient();
+        const result = await client.auth.resetPasswordForEmail(email, { redirectTo: redirectTo });
+        if (result.error) throw result.error;
+    }
+
+    async function updatePassword(newPassword) {
+        const client = await ensureClient();
+        const result = await client.auth.updateUser({ password: newPassword });
+        if (result.error) throw result.error;
+        state.session = result.data.session || state.session;
+        await loadProfile(result.data.user);
+        notify();
+    }
+
+    function onChange(fn) {
+        listeners.push(fn);
+    }
+
+    // Fired specifically for Supabase's PASSWORD_RECOVERY auth event (the
+    // user landed back here from the reset-password email link), not every
+    // session change — onChange() alone can't distinguish that from an
+    // ordinary sign-in.
+    function onPasswordRecovery(fn) {
+        recoveryListeners.push(fn);
+    }
+
+    return {
+        ensureClient: ensureClient,
+        refresh: refresh,
+        signIn: signIn,
+        signOut: signOut,
+        resetPasswordForEmail: resetPasswordForEmail,
+        updatePassword: updatePassword,
+        onChange: onChange,
+        onPasswordRecovery: onPasswordRecovery,
+        getSession: function () { return state.session; },
+        getProfile: function () { return state.profile; }
+    };
+})();
+
+window.BirdieAuth = BirdieAuth;
+
+document.addEventListener('DOMContentLoaded', function() {
     const headerCta = document.querySelector('.header-cta');
     const mobileNavList = document.querySelector('.nav-mobile .nav-list');
 
-    function getSession() {
-        try {
-            const session = JSON.parse(localStorage.getItem(AUTH_STORAGE_KEY) || 'null');
-            return session && session.role ? session : null;
-        } catch (error) {
-            return null;
+    function roleLabel(role) {
+        const labels = { admin: 'Admin', management: 'Management', scorer: 'Scorer', member: 'Member' };
+        return labels[role] || 'Member';
+    }
+
+    const LOGIN_ACTION_TIMEOUT_MS = 15000;
+
+    function withTimeout(promise, timeoutMs, timeoutMessage) {
+        return new Promise(function (resolve, reject) {
+            const timer = window.setTimeout(function () {
+                reject(new Error(timeoutMessage));
+            }, timeoutMs);
+            promise.then(
+                function (value) {
+                    window.clearTimeout(timer);
+                    resolve(value);
+                },
+                function (error) {
+                    window.clearTimeout(timer);
+                    reject(error);
+                }
+            );
+        });
+    }
+
+    function setAuthStatus(form, text) {
+        const statusEl = form && form.querySelector('.auth-status');
+        if (statusEl) statusEl.textContent = text || '';
+    }
+
+    function setAuthError(form, text) {
+        const errorEl = form && form.querySelector('.auth-error');
+        if (errorEl) errorEl.textContent = text || '';
+    }
+
+    function describeSignInError(error) {
+        const message = String(error && error.message ? error.message : '').toLowerCase();
+        if (message.indexOf('could not reach the login service') !== -1
+            || message.indexOf('timed out') !== -1
+            || message.indexOf('failed to fetch') !== -1
+            || message.indexOf('networkerror') !== -1
+            || message.indexOf('login service could not load') !== -1) {
+            return 'Could not reach the login service. Check your connection and try again.';
         }
+        if (message.indexOf('invalid login credentials') !== -1) {
+            return 'Email or password is incorrect. You can use Forgot password below.';
+        }
+        if (message.indexOf('email not confirmed') !== -1) {
+            return 'Please confirm your email address before signing in — check your inbox for a confirmation link.';
+        }
+        return 'Login failed. Please try again or use Forgot password.';
     }
 
-    function setSession(session) {
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+    function describePasswordUpdateError(error) {
+        const message = String(error && error.message ? error.message : '').toLowerCase();
+        if (message.indexOf('could not reach the login service') !== -1
+            || message.indexOf('timed out') !== -1
+            || message.indexOf('failed to fetch') !== -1) {
+            return 'Could not reach the login service. Check your connection and try again.';
+        }
+        if (message.indexOf('password') !== -1 && (message.indexOf('least') !== -1 || message.indexOf('short') !== -1 || message.indexOf('character') !== -1)) {
+            return 'Password must be at least 8 characters.';
+        }
+        return 'Could not update your password. Please try again.';
     }
 
-    function clearSession() {
-        localStorage.removeItem(AUTH_STORAGE_KEY);
-    }
-
-    function openLoginModal() {
+    // Toggles the login modal between its two mutually-exclusive field
+    // groups. `required` is set explicitly on both groups so a hidden
+    // group can never block native form validation on the other.
+    function setAuthMode(mode) {
         const modal = document.getElementById('auth-modal');
         if (!modal) return;
+        modal.setAttribute('data-mode', mode);
+
+        const loginFields = modal.querySelector('.auth-login-fields');
+        const recoveryFields = modal.querySelector('.auth-recovery-fields');
+        const title = document.getElementById('auth-title');
+        const subtitle = document.getElementById('auth-subtitle');
+        const submitBtn = modal.querySelector('.auth-submit');
+        const emailInput = document.getElementById('auth-username');
+        const passwordInput = document.getElementById('auth-password');
+        const newPasswordInput = document.getElementById('auth-new-password');
+        const confirmPasswordInput = document.getElementById('auth-confirm-password');
+        const isRecovery = mode === 'recovery';
+
+        if (loginFields) loginFields.hidden = isRecovery;
+        if (recoveryFields) recoveryFields.hidden = !isRecovery;
+        if (title) title.textContent = isRecovery ? 'Set a New Password' : 'Member Login';
+        if (subtitle) subtitle.textContent = isRecovery
+            ? 'Choose a new password for your Birdie Squad account.'
+            : 'Use your Birdie Squad email and password.';
+        if (submitBtn) submitBtn.textContent = isRecovery ? 'Update Password' : 'Sign In';
+        if (emailInput) emailInput.required = !isRecovery;
+        if (passwordInput) passwordInput.required = !isRecovery;
+        if (newPasswordInput) newPasswordInput.required = isRecovery;
+        if (confirmPasswordInput) confirmPasswordInput.required = isRecovery;
+    }
+
+    function openLoginModal(mode) {
+        const modal = document.getElementById('auth-modal');
+        if (!modal) return;
+        setAuthMode(mode === 'recovery' ? 'recovery' : 'login');
         modal.classList.add('active');
-        const usernameInput = modal.querySelector('#auth-username');
-        if (usernameInput) usernameInput.focus();
+        const focusTarget = mode === 'recovery'
+            ? modal.querySelector('#auth-new-password')
+            : modal.querySelector('#auth-username');
+        if (focusTarget) focusTarget.focus();
     }
 
     function closeLoginModal() {
@@ -42,12 +324,31 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!modal) return;
         modal.classList.remove('active');
         const form = modal.querySelector('#auth-form');
-        const error = modal.querySelector('.auth-error');
-        if (form) form.reset();
-        if (error) error.textContent = '';
+        if (form) {
+            form.reset();
+            setAuthError(form, '');
+            setAuthStatus(form, '');
+        }
+        setAuthMode('login');
+    }
+
+    // Cosmetic only — Supabase has already consumed the recovery token from
+    // the URL hash by the time PASSWORD_RECOVERY fires, so clearing it here
+    // cannot break the session it already established.
+    function cleanRecoveryUrlNoise() {
+        try {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('password-recovery');
+            url.hash = '';
+            window.history.replaceState(null, '', url.pathname + url.search);
+        } catch (error) {
+            // Non-fatal cosmetic cleanup only.
+        }
     }
 
     function routeByRole(role) {
+        // The Events page renders its member hub in place; do not navigate away from it.
+        if (isEventsPage()) return;
         if (role === 'admin' || role === 'management') {
             window.location.href = 'governance.html';
             return;
@@ -56,7 +357,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function updateAuthButtons() {
-        const session = getSession();
+        const session = BirdieAuth.getSession();
+        const profile = BirdieAuth.getProfile();
         const desktopBtn = document.getElementById('login-trigger');
         const mobileBtn = document.getElementById('login-trigger-mobile');
         const roleTag = document.getElementById('auth-role-tag');
@@ -66,7 +368,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (session) {
             desktopBtn.textContent = 'Logout';
             mobileBtn.textContent = 'Logout';
-            roleTag.textContent = session.label;
+            roleTag.textContent = (profile && profile.approved === false)
+                ? 'Pending Approval'
+                : roleLabel(profile ? profile.role : 'member');
             roleTag.classList.add('active');
         } else {
             desktopBtn.textContent = 'Login';
@@ -77,10 +381,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function handleAuthButtonClick() {
-        const session = getSession();
-        if (session) {
-            clearSession();
-            updateAuthButtons();
+        if (BirdieAuth.getSession()) {
+            BirdieAuth.signOut().catch(function (error) {
+                console.error('Birdie logout failed:', error);
+            });
             return;
         }
         openLoginModal();
@@ -117,16 +421,36 @@ document.addEventListener('DOMContentLoaded', function() {
             const modal = document.createElement('div');
             modal.id = 'auth-modal';
             modal.className = 'auth-modal';
+            modal.setAttribute('data-mode', 'login');
             modal.innerHTML = `
                 <div class="auth-modal-panel" role="dialog" aria-modal="true" aria-labelledby="auth-title">
                     <button type="button" class="auth-close" id="auth-close" aria-label="Close login">&times;</button>
                     <h3 id="auth-title">Member Login</h3>
-                    <p class="auth-subtitle">Use your assigned credentials to access your role area.</p>
-                    <form id="auth-form">
-                        <label for="auth-username">Username</label>
-                        <input id="auth-username" name="username" type="text" required autocomplete="username">
-                        <label for="auth-password">Password</label>
-                        <input id="auth-password" name="password" type="password" required autocomplete="current-password">
+                    <p class="auth-subtitle" id="auth-subtitle">Use your Birdie Squad email and password.</p>
+                    <form id="auth-form" novalidate>
+                        <div class="auth-login-fields">
+                            <label for="auth-username">Email</label>
+                            <input id="auth-username" name="email" type="email" required autocomplete="email" placeholder="name@example.com">
+                            <label for="auth-password">Password</label>
+                            <div class="auth-password-wrap">
+                                <input id="auth-password" name="password" type="password" required autocomplete="current-password">
+                                <button type="button" class="auth-toggle-visibility" data-toggle-visibility="auth-password" aria-pressed="false" aria-label="Show password">Show</button>
+                            </div>
+                            <button type="button" class="auth-link-button" id="auth-forgot-trigger">Forgot password?</button>
+                        </div>
+                        <div class="auth-recovery-fields" hidden>
+                            <label for="auth-new-password">New password</label>
+                            <div class="auth-password-wrap">
+                                <input id="auth-new-password" name="new_password" type="password" autocomplete="new-password" minlength="8">
+                                <button type="button" class="auth-toggle-visibility" data-toggle-visibility="auth-new-password" aria-pressed="false" aria-label="Show password">Show</button>
+                            </div>
+                            <label for="auth-confirm-password">Confirm new password</label>
+                            <div class="auth-password-wrap">
+                                <input id="auth-confirm-password" name="confirm_password" type="password" autocomplete="new-password" minlength="8">
+                                <button type="button" class="auth-toggle-visibility" data-toggle-visibility="auth-confirm-password" aria-pressed="false" aria-label="Show password">Show</button>
+                            </div>
+                        </div>
+                        <p class="auth-status" aria-live="polite"></p>
                         <p class="auth-error" aria-live="polite"></p>
                         <button type="submit" class="btn btn-primary auth-submit">Sign In</button>
                     </form>
@@ -136,12 +460,138 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    async function handleLoginSubmit(form) {
+        const email = (form.email.value || '').trim();
+        const password = form.password.value || '';
+        const submitBtn = form.querySelector('.auth-submit');
+
+        setAuthError(form, '');
+        if (!email || !password) {
+            setAuthError(form, 'Enter your email and password.');
+            return;
+        }
+
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Signing in…';
+        }
+        setAuthStatus(form, 'Connecting securely…');
+
+        try {
+            await withTimeout(
+                BirdieAuth.signIn(email, password),
+                LOGIN_ACTION_TIMEOUT_MS,
+                'Could not reach the login service. Check your connection and try again.'
+            );
+            setAuthStatus(form, '');
+            updateAuthButtons();
+            closeLoginModal();
+            const profile = BirdieAuth.getProfile();
+            routeByRole(profile ? profile.role : 'member');
+        } catch (error) {
+            console.error('Birdie login failed:', error);
+            setAuthStatus(form, '');
+            setAuthError(form, describeSignInError(error));
+        } finally {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Sign In';
+            }
+        }
+    }
+
+    async function handlePasswordUpdateSubmit(form) {
+        const newPassword = form.new_password.value || '';
+        const confirmPassword = form.confirm_password.value || '';
+        const submitBtn = form.querySelector('.auth-submit');
+        const modal = document.getElementById('auth-modal');
+
+        setAuthError(form, '');
+        if (newPassword.length < 8) {
+            setAuthError(form, 'Password must be at least 8 characters.');
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            setAuthError(form, 'Passwords do not match.');
+            return;
+        }
+
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Updating…';
+        }
+        setAuthStatus(form, 'Updating your password…');
+
+        try {
+            await withTimeout(
+                BirdieAuth.updatePassword(newPassword),
+                LOGIN_ACTION_TIMEOUT_MS,
+                'Could not reach the login service. Check your connection and try again.'
+            );
+            setAuthStatus(form, 'Password updated. You can now sign in with your new password.');
+            setAuthMode('login');
+            form.reset();
+            updateAuthButtons();
+        } catch (error) {
+            console.error('Birdie Auth password update failed:', error);
+            setAuthStatus(form, '');
+            setAuthError(form, describePasswordUpdateError(error));
+        } finally {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                const currentMode = modal ? modal.getAttribute('data-mode') : 'login';
+                submitBtn.textContent = currentMode === 'recovery' ? 'Update Password' : 'Sign In';
+            }
+        }
+    }
+
+    async function handleForgotPassword() {
+        const form = document.getElementById('auth-form');
+        const emailInput = document.getElementById('auth-username');
+        const btn = document.getElementById('auth-forgot-trigger');
+        const email = (emailInput && emailInput.value ? emailInput.value : '').trim();
+
+        if (!form) return;
+        setAuthError(form, '');
+
+        if (!email) {
+            if (emailInput) emailInput.focus();
+            setAuthError(form, 'Enter your email first.');
+            return;
+        }
+
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Sending…';
+        }
+        setAuthStatus(form, '');
+
+        try {
+            const redirectTo = window.location.origin + '/events?password-recovery=1';
+            await withTimeout(
+                BirdieAuth.resetPasswordForEmail(email, redirectTo),
+                LOGIN_ACTION_TIMEOUT_MS,
+                'Could not reach the login service. Check your connection and try again.'
+            );
+            setAuthStatus(form, 'If that email belongs to an account, a password reset link has been sent.');
+        } catch (error) {
+            console.error('Birdie Auth password reset request failed:', error);
+            setAuthError(form, 'Could not send the reset email right now. Please try again.');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Forgot password?';
+            }
+        }
+    }
+
     function bindAuthEvents() {
         const desktopBtn = document.getElementById('login-trigger');
         const mobileBtn = document.getElementById('login-trigger-mobile');
         const modal = document.getElementById('auth-modal');
         const closeBtn = document.getElementById('auth-close');
         const form = document.getElementById('auth-form');
+        const forgotBtn = document.getElementById('auth-forgot-trigger');
 
         if (desktopBtn) desktopBtn.addEventListener('click', handleAuthButtonClick);
         if (mobileBtn) {
@@ -174,36 +624,56 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
+        // Delegated so the same handler covers the login, new-password and
+        // confirm-password toggles without three near-identical listeners.
+        document.addEventListener('click', function (event) {
+            const toggle = event.target.closest('[data-toggle-visibility]');
+            if (!toggle) return;
+            const targetId = toggle.getAttribute('data-toggle-visibility');
+            const input = document.getElementById(targetId);
+            if (!input) return;
+            const willShow = input.type === 'password';
+            input.type = willShow ? 'text' : 'password';
+            toggle.setAttribute('aria-pressed', willShow ? 'true' : 'false');
+            toggle.textContent = willShow ? 'Hide' : 'Show';
+            toggle.setAttribute('aria-label', willShow ? 'Hide password' : 'Show password');
+        });
+
+        if (forgotBtn) {
+            forgotBtn.addEventListener('click', function () {
+                handleForgotPassword().catch(function (error) {
+                    console.error('Birdie Auth forgot-password handler failed:', error);
+                });
+            });
+        }
+
         if (form) {
             form.addEventListener('submit', function(event) {
                 event.preventDefault();
-                const username = (form.username.value || '').trim().toLowerCase();
-                const password = form.password.value || '';
-                const error = form.querySelector('.auth-error');
-                const matched = credentials.find(
-                    (account) => account.username === username && account.password === password
-                );
-
-                if (!matched) {
-                    if (error) error.textContent = 'Invalid username or password.';
-                    return;
+                const mode = modal ? modal.getAttribute('data-mode') : 'login';
+                if (mode === 'recovery') {
+                    handlePasswordUpdateSubmit(form).catch(function (error) {
+                        console.error('Birdie Auth password update handler failed:', error);
+                    });
+                } else {
+                    handleLoginSubmit(form).catch(function (error) {
+                        console.error('Birdie Auth login handler failed:', error);
+                    });
                 }
-
-                setSession({
-                    username: matched.username,
-                    role: matched.role,
-                    label: matched.label
-                });
-                updateAuthButtons();
-                closeLoginModal();
-                routeByRole(matched.role);
             });
         }
+
+        BirdieAuth.onPasswordRecovery(function () {
+            openLoginModal('recovery');
+            cleanRecoveryUrlNoise();
+        });
     }
 
     createAuthUi();
     bindAuthEvents();
     updateAuthButtons();
+    BirdieAuth.onChange(updateAuthButtons);
+    BirdieAuth.refresh();
 
     function ensureEventsNavLinks() {
         const navLists = document.querySelectorAll('.nav .nav-list');
@@ -330,6 +800,16 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
         `;
     }
+
+    // Shared with js/birdie-public-events.js so the Supabase-backed public
+    // event rendering can reuse the same countdown markup/timer logic
+    // instead of duplicating it — one countdown implementation, two data
+    // sources (static fallback here, live data there).
+    window.BirdieEventUtils = {
+        formatEventDate: formatEventDate,
+        renderCountdownMarkup: renderCountdownMarkup,
+        startCountdownTimer: startCountdownTimer
+    };
 
     function renderHomepageCountdown() {
         if (!isHomepage()) return;
