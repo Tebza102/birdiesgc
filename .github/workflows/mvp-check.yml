@@ -84,6 +84,13 @@ jobs:
           curl --fail --silent http://127.0.0.1:4173/js/birdie-public-events.js >/tmp/birdie-public-events.js
           curl --fail --silent http://127.0.0.1:4173/ >/tmp/index.html
           curl --fail --silent http://127.0.0.1:4173/css/style.css >/tmp/style.css
+          curl --fail --silent http://127.0.0.1:4173/about.html >/tmp/about.html
+          curl --fail --silent http://127.0.0.1:4173/contact.html >/tmp/contact.html
+          curl --fail --silent http://127.0.0.1:4173/get-involved.html >/tmp/get-involved.html
+          curl --fail --silent http://127.0.0.1:4173/governance.html >/tmp/governance.html
+          curl --fail --silent http://127.0.0.1:4173/member-network.html >/tmp/member-network.html
+          curl --fail --silent http://127.0.0.1:4173/programmes.html >/tmp/programmes.html
+          curl --fail --silent http://127.0.0.1:4173/sponsors.html >/tmp/sponsors.html
           grep -q 'member-golf-mount' /tmp/events.html
           grep -q 'SUPABASE_PUBLISHABLE_KEY' /tmp/main.js
           grep -q 'PASSWORD_RECOVERY' /tmp/main.js
@@ -93,8 +100,14 @@ jobs:
           grep -q 'BirdieLegacyImport' /tmp/birdie-mvp.js
           grep -q 'loadPublicGolfDays' /tmp/birdie-public-events.js
           grep -q 'js/birdie-public-events.js' /tmp/index.html
-          # Legacy World Cup-era automatic poster popup must not exist anywhere in served output.
-          if grep -qi 'event-popup' /tmp/style.css /tmp/index.html /tmp/events.html /tmp/main.js; then
+          grep -q 'style.css?v=' /tmp/index.html
+          grep -q 'main.js?v=' /tmp/index.html
+          # Legacy World Cup-era automatic poster popup must not exist anywhere in served output,
+          # across every top-level page and the shared assets they load.
+          if grep -qiE 'event-popup|bafana|world[ -]?cup|initHomepageAnnouncementPopup' \
+            /tmp/style.css /tmp/main.js /tmp/index.html /tmp/events.html \
+            /tmp/about.html /tmp/contact.html /tmp/get-involved.html /tmp/governance.html \
+            /tmp/member-network.html /tmp/programmes.html /tmp/sponsors.html; then
             echo 'Legacy event-popup markup/CSS is still being served.' >&2
             exit 1
           fi

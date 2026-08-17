@@ -35,6 +35,19 @@ const styleCss = fs.readFileSync(path.join(__dirname, '..', 'css', 'style.css'),
 const indexHtml = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const eventsHtml = fs.readFileSync(path.join(__dirname, '..', 'events.html'), 'utf8');
 const mainJs = fs.readFileSync(path.join(__dirname, '..', 'js', 'main.js'), 'utf8');
+const eventsDataJs = fs.readFileSync(path.join(__dirname, '..', 'js', 'events-data.js'), 'utf8');
+
+const TOP_LEVEL_HTML_FILES = [
+    'index.html',
+    'about.html',
+    'contact.html',
+    'events.html',
+    'get-involved.html',
+    'governance.html',
+    'member-network.html',
+    'programmes.html',
+    'sponsors.html'
+];
 
 let passed = 0;
 let failed = 0;
@@ -167,18 +180,58 @@ test('the poster image and prize rows stay width-bound on mobile (no fixed-width
     assert.match(mobileBlock[0], /\.mvp-prize-row\s*\{\s*\n\s*grid-template-columns:\s*1fr;/, 'expected prize rows to stack to a single column on mobile');
 });
 
-test('the legacy World Cup-era automatic poster popup is fully removed, while the new event-poster system remains', function () {
-    assert.doesNotMatch(styleCss, /\.event-popup/i, 'expected no .event-popup* CSS left in style.css');
+// Signatures of the specific obsolete World Cup-era popup found live in
+// production (project-os/10-prompts/claude-remove-popup-everywhere-production-cache.md):
+// a homepage-only "Bafana Bafana" announcement popup, JS-injected into
+// document.body, gated by a sessionStorage key, shown after a timer. This
+// deliberately does not ban the generic word "modal", since the real
+// auth-modal login modal must remain legal.
+const OBSOLETE_POPUP_SIGNATURES = [
+    /event-popup/i,
+    /initHomepageAnnouncementPopup/i,
+    /bafana/i,
+    /world[\s-]?cup/i,
+    /birdiesgc_bafana_support_popup_closed/i,
+    /Birdie-SGC-Bafana-Support-Poster/i
+];
+
+test('the legacy World Cup-era automatic poster popup is fully removed from every top-level page and shared asset, while the new event-poster system remains', function () {
     assert.doesNotMatch(mvpCss, /\.event-popup/i, 'expected no .event-popup* CSS left in mvp.css');
-    assert.doesNotMatch(indexHtml, /event-popup/i, 'expected no event-popup markup in index.html');
-    assert.doesNotMatch(eventsHtml, /event-popup/i, 'expected no event-popup markup in events.html');
-    assert.doesNotMatch(mainJs, /event-popup/i, 'expected no event-popup trigger in main.js');
+    assert.doesNotMatch(eventsDataJs, /event-popup/i, 'expected no event-popup reference in events-data.js');
     assert.doesNotMatch(birdieMvpJs, /event-popup/i, 'expected no event-popup trigger in birdie-mvp.js');
     assert.doesNotMatch(birdiePublicEventsJs, /event-popup/i, 'expected no event-popup trigger in birdie-public-events.js');
+    for (const sig of OBSOLETE_POPUP_SIGNATURES) {
+        assert.doesNotMatch(styleCss, sig, 'found ' + sig + ' in css/style.css');
+        assert.doesNotMatch(mainJs, sig, 'found ' + sig + ' in js/main.js');
+    }
+    for (const file of TOP_LEVEL_HTML_FILES) {
+        const html = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+        for (const sig of OBSOLETE_POPUP_SIGNATURES) {
+            assert.doesNotMatch(html, sig, 'found ' + sig + ' in ' + file);
+        }
+    }
     // The new Supabase-backed poster system must still be present.
     assert.match(migrationSql, /event-posters/);
     assert.match(mvpCss, /\.mvp-event-poster\s*\{/);
     assert.match(birdiePublicEventsJs, /Featured/i);
+});
+
+test('every top-level page loads the cache-busted shared style.css and main.js (forces browsers off any stale cached popup asset)', function () {
+    for (const file of TOP_LEVEL_HTML_FILES) {
+        const html = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+        assert.match(html, /href="css\/style\.css\?v=[^"]+"/, file + ' does not load a cache-busted css/style.css');
+        assert.match(html, /src="js\/main\.js\?v=[^"]+"/, file + ' does not load a cache-busted js/main.js');
+    }
+    assert.match(indexHtml, /src="js\/events-data\.js\?v=[^"]+"/, 'index.html does not load a cache-busted js/events-data.js');
+    assert.match(eventsHtml, /src="js\/events-data\.js\?v=[^"]+"/, 'events.html does not load a cache-busted js/events-data.js');
+    assert.match(eventsHtml, /href="css\/mvp\.css\?v=[^"]+"/, 'events.html does not load a cache-busted css/mvp.css');
+    assert.match(eventsHtml, /src="js\/birdie-mvp\.js\?v=[^"]+"/, 'events.html does not load a cache-busted js/birdie-mvp.js');
+    assert.match(eventsHtml, /src="js\/birdie-public-events\.js\?v=[^"]+"/, 'events.html does not load a cache-busted js/birdie-public-events.js');
+});
+
+test('vercel.json sets a revalidation Cache-Control header on HTML routes', function () {
+    const vercelJson = fs.readFileSync(path.join(__dirname, '..', 'vercel.json'), 'utf8');
+    assert.match(vercelJson, /must-revalidate/);
 });
 
 console.log('\nEvent details / poster: ' + passed + ' passed, ' + failed + ' failed.');
