@@ -31,6 +31,10 @@ const birdieMvpJs = fs.readFileSync(path.join(__dirname, '..', 'js', 'birdie-mvp
 const birdiePublicEventsJs = fs.readFileSync(path.join(__dirname, '..', 'js', 'birdie-public-events.js'), 'utf8');
 const migrationSql = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'migrations', '20260816130000_event_details_and_poster.sql'), 'utf8');
 const mvpCss = fs.readFileSync(path.join(__dirname, '..', 'css', 'mvp.css'), 'utf8');
+const styleCss = fs.readFileSync(path.join(__dirname, '..', 'css', 'style.css'), 'utf8');
+const indexHtml = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+const eventsHtml = fs.readFileSync(path.join(__dirname, '..', 'events.html'), 'utf8');
+const mainJs = fs.readFileSync(path.join(__dirname, '..', 'js', 'main.js'), 'utf8');
 
 let passed = 0;
 let failed = 0;
@@ -161,6 +165,20 @@ test('the poster image and prize rows stay width-bound on mobile (no fixed-width
     const mobileBlock = /@media \(max-width: 640px\) \{[\s\S]*$/.exec(mvpCss);
     assert.ok(mobileBlock, 'could not find the mobile media query block');
     assert.match(mobileBlock[0], /\.mvp-prize-row\s*\{\s*\n\s*grid-template-columns:\s*1fr;/, 'expected prize rows to stack to a single column on mobile');
+});
+
+test('the legacy World Cup-era automatic poster popup is fully removed, while the new event-poster system remains', function () {
+    assert.doesNotMatch(styleCss, /\.event-popup/i, 'expected no .event-popup* CSS left in style.css');
+    assert.doesNotMatch(mvpCss, /\.event-popup/i, 'expected no .event-popup* CSS left in mvp.css');
+    assert.doesNotMatch(indexHtml, /event-popup/i, 'expected no event-popup markup in index.html');
+    assert.doesNotMatch(eventsHtml, /event-popup/i, 'expected no event-popup markup in events.html');
+    assert.doesNotMatch(mainJs, /event-popup/i, 'expected no event-popup trigger in main.js');
+    assert.doesNotMatch(birdieMvpJs, /event-popup/i, 'expected no event-popup trigger in birdie-mvp.js');
+    assert.doesNotMatch(birdiePublicEventsJs, /event-popup/i, 'expected no event-popup trigger in birdie-public-events.js');
+    // The new Supabase-backed poster system must still be present.
+    assert.match(migrationSql, /event-posters/);
+    assert.match(mvpCss, /\.mvp-event-poster\s*\{/);
+    assert.match(birdiePublicEventsJs, /Featured/i);
 });
 
 console.log('\nEvent details / poster: ' + passed + ' passed, ' + failed + ' failed.');

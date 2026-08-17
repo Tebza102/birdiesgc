@@ -401,3 +401,38 @@ Pass for everything achievable without a live Supabase project or a browser in t
 
 **Next action:**
 - A human (or a session with deployment permission) should run `vercel --prod --yes` from this branch to publish to `birdiesgc-pilot`, add that origin to Supabase's redirect allowlist, then sign in as `apprigate@gmail.com`, the Chairman and the Treasurer, and run the Forgot-password flow end to end with a real inbox. Do not merge to `main`; never deploy to `www.birdiesgc.co.za`.
+
+### 2026-08-17 — Remove Legacy World Cup Poster Popup
+
+**Changed by:** Agent
+
+**Files changed:**
+- css/style.css
+- scripts/test-event-details.js
+- .github/workflows/mvp-check.yml
+
+**Summary:**
+Per `project-os/10-prompts/claude-remove-legacy-world-cup-poster-popup.md`. Searched the entire branch (all `.html`, `.js`, `.css`, image references, `git log -S"event-popup"` across history) for any active trigger that creates the old automatic promotional popup — none exists anywhere in the current tree or its git history under that class name; no HTML markup, no JS that constructs/opens it, no timer/localStorage/sessionStorage-driven trigger, no service worker. The only remnant was ~100 lines of dead `.event-popup*` CSS in `css/style.css` (rules for `.event-popup`, `.event-popup-panel`, `.event-popup-close`, `.event-popup-media/-image/-content/-kicker/-meta/-cta`, and its `@media (min-width: 860px)` variant) with zero corresponding markup anywhere — removed completely rather than left as a `display:none` workaround, since there was no live source to defensively guard against. Confirmed the pre-existing file-wide brace imbalance (343 close vs 342 open, predating this change) is unchanged after the removal (328 vs 327) — the removed block itself was balanced.
+
+Did not touch the new Gate 2D Supabase-backed poster system: `event-posters` Storage bucket, Featured Event poster rendering (`js/birdie-public-events.js`), calendar poster/prize details, poster upload/edit UI in `js/birdie-mvp.js`, or the `auth-modal` login modal — all confirmed still present by both a static grep sweep and the new regression test.
+
+Added a regression assertion to `scripts/test-event-details.js` asserting no `event-popup` string survives in `style.css`, `mvp.css`, `index.html`, `events.html`, `main.js`, `birdie-mvp.js`, or `birdie-public-events.js`, while the `event-posters` bucket reference, `.mvp-event-poster` CSS, and Featured Event code all still exist. Extended the CI local-server smoke test to fetch `css/style.css` and grep-fail if `event-popup` appears anywhere in what's actually served.
+
+**Tests run:**
+- `node scripts/test-event-details.js`: 15/15 passing (14 previous + 1 new popup-removal check).
+- `node scripts/test-legacy-import.js`: 24/24 passing (unaffected).
+- `node scripts/test-mobile-css.js`: 15/15 passing (unaffected).
+- `node scripts/test-auth-ui.js`: 20/20 passing (unaffected).
+- `node --check` on all shipped JS files: pass.
+- Secret scan: no matches.
+- `npm run build`: pass.
+- Local dev-server smoke test (including the new `event-popup` grep-fail check against served `/`, `/events`, `js/main.js`, `css/style.css`): pass.
+
+**Result:**
+The legacy popup CSS is gone; nothing in the current branch (source or served output) still references `.event-popup*`. The new event-poster system, Featured Event card, calendar event details, poster upload, login modal, scoring, Excel import, Realtime, roles, and RLS are all unchanged and confirmed still present by the new test.
+
+**Risks remaining:**
+- No real browser confirmation on this pass alone — deployed to `birdiesgc-pilot` and verified via `curl` immediately after (see this same session's deployment step for the exact URLs checked).
+
+**Next action:**
+- None outstanding for this specific task; broader Gate 2E items (real sign-in, redirect URL config) remain as previously logged.
